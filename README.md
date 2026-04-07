@@ -355,6 +355,12 @@ The generated deployment notes assume:
 - `packages/frontend/src/views/PlanReviewView.vue`: approval and contradiction-review UI
 - `packages/frontend/src/views/SettingsView.vue`: user, role, project, provider, and permission administration
 
+## License
+
+This project is licensed under the Apache License 2.0.
+
+Apache-2.0 keeps the project permissive for commercial and open-source use while adding an explicit patent grant, which is a better default than MIT for a platform intended to be extended and integrated.
+
 ## Status
 
 This repository is already structured for local development, backend testing, end-to-end testing, and production bundle generation. The main external dependency is local access to the supported agent CLIs and valid credentials for at least one provider.
