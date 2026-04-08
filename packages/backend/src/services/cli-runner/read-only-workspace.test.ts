@@ -96,4 +96,20 @@ describe('createReadOnlyWorkspaceSnapshot', () => {
     expect(fileStat.mode & 0o777).toBe(0o444);
     expect(dirStat.mode & 0o777).toBe(0o555);
   });
+
+  it('skips unreadable files instead of failing snapshot creation', async () => {
+    const sourceDir = await createTempDir('readonly-source-');
+    const isolationDir = await createTempDir('readonly-isolation-');
+    const readableFile = path.join(sourceDir, 'README.md');
+    const unreadableFile = path.join(sourceDir, '.credentials_rsaparams');
+
+    await fs.writeFile(readableFile, 'ok\n', 'utf-8');
+    await fs.writeFile(unreadableFile, 'secret\n', 'utf-8');
+    await fs.chmod(unreadableFile, 0o000);
+
+    const snapshotPath = await createReadOnlyWorkspaceSnapshot(sourceDir, isolationDir);
+
+    await expect(fs.readFile(path.join(snapshotPath, 'README.md'), 'utf-8')).resolves.toBe('ok\n');
+    await expect(fs.access(path.join(snapshotPath, '.credentials_rsaparams'))).rejects.toThrow();
+  });
 });

@@ -183,7 +183,7 @@ server {
     listen 80;
     server_name _;
 
-    root /opt/agentic-gui/packages/frontend/dist;
+    root /var/www/agentic-gui/;
     index index.html;
 
     location /api/ {

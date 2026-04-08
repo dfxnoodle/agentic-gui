@@ -32,7 +32,16 @@ export async function createReadOnlyWorkspaceSnapshot(projectPath: string, isola
 async function copyDirectory(sourceDir: string, destinationDir: string): Promise<void> {
   await fs.mkdir(destinationDir, { recursive: true });
 
-  const entries = await fs.readdir(sourceDir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await fs.readdir(sourceDir, { withFileTypes: true });
+  } catch (error) {
+    if (isSkippableFsError(error)) {
+      return;
+    }
+    throw error;
+  }
+
   for (const entry of entries) {
     const sourcePath = path.join(sourceDir, entry.name);
     const destinationPath = path.join(destinationDir, entry.name);
@@ -47,9 +56,24 @@ async function copyDirectory(sourceDir: string, destinationDir: string): Promise
     }
 
     if (entry.isFile()) {
-      await fs.copyFile(sourcePath, destinationPath);
+      try {
+        await fs.copyFile(sourcePath, destinationPath);
+      } catch (error) {
+        if (isSkippableFsError(error)) {
+          continue;
+        }
+        throw error;
+      }
     }
   }
+}
+
+function isSkippableFsError(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('code' in error)) {
+    return false;
+  }
+
+  return error.code === 'EACCES' || error.code === 'EPERM';
 }
 
 async function makeTreeReadOnly(rootPath: string): Promise<void> {
