@@ -53,8 +53,10 @@ if sudo test -d "$CURRENT_DATA_DIR" && ! sudo test -f "$PERSISTENT_DATA_DIR/.mig
     sudo touch "$PERSISTENT_DATA_DIR/.migrated-from-release"
 fi
 
-echo "   Ensuring DATA_DIR points to persistent storage..."
-if ! sudo grep -qE '^DATA_DIR=' "$TARGET_DIR/.env"; then
+echo "   Forcing DATA_DIR to persistent storage..."
+if sudo grep -qE '^DATA_DIR=' "$TARGET_DIR/.env"; then
+    sudo sed -i "s|^DATA_DIR=.*$|DATA_DIR=$PERSISTENT_DATA_DIR|" "$TARGET_DIR/.env"
+else
     echo "DATA_DIR=$PERSISTENT_DATA_DIR" | sudo tee -a "$TARGET_DIR/.env" >/dev/null
 fi
 
