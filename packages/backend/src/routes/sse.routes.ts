@@ -49,7 +49,7 @@ sseRoutes.get('/:conversationId', async (req, res) => {
         payload: { state: conversation.state },
       });
     }
-  } catch {
-    // Best effort — not critical if the lookup fails
+  } catch (err) {
+    console.error('[SSE] Failed to send catch-up state_change for conversation', conversationId, err);
   }
 });
