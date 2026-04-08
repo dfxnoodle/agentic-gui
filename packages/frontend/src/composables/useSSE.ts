@@ -128,7 +128,10 @@ export function useSSE() {
         break;
 
       case 'progress':
-        thinkingText.value = event.content;
+        // Some providers emit "response complete" before persistence/state updates finish.
+        thinkingText.value = /response complete/i.test(event.content)
+          ? 'Finalizing response...'
+          : event.content;
         break;
 
       case 'error':
@@ -137,7 +140,9 @@ export function useSSE() {
         break;
 
       case 'done':
-        // The state_change event handles finalization
+        // Unblock input even if final state_change arrives late or gets dropped.
+        isStreaming.value = false;
+        thinkingText.value = '';
         break;
     }
   }

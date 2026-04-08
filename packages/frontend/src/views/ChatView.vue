@@ -106,7 +106,7 @@
           <div v-if="streamingContent" class="message assistant streaming">
             <div class="message-role">AI</div>
             <div class="message-content" v-html="renderMarkdown(streamingContent)"></div>
-            <span class="typing-indicator"></span>
+            <span v-if="isStreaming" class="typing-indicator"></span>
           </div>
 
           <!-- Waiting for AI with no content yet -->
