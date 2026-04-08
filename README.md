@@ -203,6 +203,14 @@ This starts:
 - the backend on `http://localhost:3001`
 - the frontend on `http://localhost:5173` by default
 
+To expose the frontend to other devices on the local network (e.g. for testing on mobile or another machine), use:
+
+```bash
+npm run dev:expose
+```
+
+Vite will print both the `localhost` and `Network` URLs on startup.
+
 You can also run each side separately:
 
 ```bash
@@ -229,6 +237,7 @@ In the UI:
 
 ```bash
 npm run dev
+npm run dev:expose
 npm run dev:backend
 npm run dev:frontend
 npm run build
