@@ -5,6 +5,23 @@ import type { CLIConfig } from '@agentic-gui/shared';
 const READ_ONLY_FILE_MODE = 0o444;
 const READ_ONLY_DIR_MODE = 0o555;
 
+const EXCLUDED_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  '.nuxt',
+  '.cache',
+  '.turbo',
+  'coverage',
+  '__pycache__',
+  '.venv',
+  'venv',
+  '.tox',
+  'target',
+]);
+
 /**
  * Build a CLI config that cannot relax execution safety.
  * Project-level env overrides and ad-hoc flags are stripped in read-only mode.
@@ -51,6 +68,9 @@ async function copyDirectory(sourceDir: string, destinationDir: string): Promise
     }
 
     if (entry.isDirectory()) {
+      if (EXCLUDED_DIRS.has(entry.name)) {
+        continue;
+      }
       await copyDirectory(sourcePath, destinationPath);
       continue;
     }

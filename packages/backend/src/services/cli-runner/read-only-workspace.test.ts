@@ -112,4 +112,25 @@ describe('createReadOnlyWorkspaceSnapshot', () => {
     await expect(fs.readFile(path.join(snapshotPath, 'README.md'), 'utf-8')).resolves.toBe('ok\n');
     await expect(fs.access(path.join(snapshotPath, '.credentials_rsaparams'))).rejects.toThrow();
   });
+
+  it('excludes node_modules, .git, and other heavy directories', async () => {
+    const sourceDir = await createTempDir('readonly-source-');
+    const isolationDir = await createTempDir('readonly-isolation-');
+
+    await fs.mkdir(path.join(sourceDir, 'src'), { recursive: true });
+    await fs.writeFile(path.join(sourceDir, 'src', 'app.ts'), 'main()\n', 'utf-8');
+    await fs.mkdir(path.join(sourceDir, 'node_modules', 'some-pkg'), { recursive: true });
+    await fs.writeFile(path.join(sourceDir, 'node_modules', 'some-pkg', 'index.js'), '{}', 'utf-8');
+    await fs.mkdir(path.join(sourceDir, '.git', 'objects'), { recursive: true });
+    await fs.writeFile(path.join(sourceDir, '.git', 'HEAD'), 'ref: refs/heads/main\n', 'utf-8');
+    await fs.mkdir(path.join(sourceDir, 'dist'), { recursive: true });
+    await fs.writeFile(path.join(sourceDir, 'dist', 'bundle.js'), '!function(){}', 'utf-8');
+
+    const snapshotPath = await createReadOnlyWorkspaceSnapshot(sourceDir, isolationDir);
+
+    await expect(fs.readFile(path.join(snapshotPath, 'src', 'app.ts'), 'utf-8')).resolves.toBe('main()\n');
+    await expect(fs.access(path.join(snapshotPath, 'node_modules'))).rejects.toThrow();
+    await expect(fs.access(path.join(snapshotPath, '.git'))).rejects.toThrow();
+    await expect(fs.access(path.join(snapshotPath, 'dist'))).rejects.toThrow();
+  });
 });

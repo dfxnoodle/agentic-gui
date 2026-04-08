@@ -268,6 +268,12 @@ export const runnerService = {
 
     // Local mode strips inherited API keys so workspace/home CLI login is used; avoid on untrusted shared hosts.
     const childEnv: NodeJS.ProcessEnv = { ...process.env };
+
+    // Point HOME to the writable isolation dir so CLIs (e.g. Gemini) that
+    // create config under $HOME don't fail with EACCES on read-only dirs
+    // like /var/www when running as a system service.
+    childEnv.HOME = isolationDir;
+
     if (credentialMode === 'local') {
       stripProviderSecretsFromEnv(childEnv, request.cliProvider);
     }
