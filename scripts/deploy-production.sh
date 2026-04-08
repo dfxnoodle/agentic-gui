@@ -3,24 +3,24 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEPLOY_ROOT_DEFAULT="$ROOT_DIR/.deploy"
+DEPLOY_ROOT_DEFAULT="/var/www"
 
 DEPLOY_ROOT="$DEPLOY_ROOT_DEFAULT"
 RELEASE_NAME="agentic-gui-$(date -u +%Y%m%dT%H%M%SZ)"
-INCLUDE_ENV=0
+INCLUDE_ENV=1
 INSTALL_DEPS=1
 
 usage() {
   cat <<'EOF'
 Usage: bash scripts/deploy-production.sh [options]
 
-Builds the monorepo and creates a production release bundle under .deploy/.
+Builds the monorepo and creates a production release bundle under /var/www.
 
 Options:
-  --include-env           Copy the root .env into the release bundle.
+  --include-env           Copy the root .env into the release bundle (default).
   --install               Run npm ci before building. This is the default.
   --skip-install          Skip npm ci and use the current workspace install as-is.
-  --output-dir PATH       Override the deploy output root (default: ./.deploy).
+  --output-dir PATH       Override the deploy output root (default: /var/www).
   --release-name NAME     Override the generated release directory name.
   -h, --help              Show this help text.
 EOF
