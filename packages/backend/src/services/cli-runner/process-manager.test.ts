@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { formatSpawnFailure, withCommonCliBinPaths } from './process-manager.js';
+import { formatSpawnFailure, formatWatchdogTimeoutMessage, withCommonCliBinPaths } from './process-manager.js';
 
 describe('withCommonCliBinPaths', () => {
   it('prepends common CLI bin directories to PATH', () => {
@@ -47,5 +47,20 @@ describe('formatSpawnFailure', () => {
     const message = formatSpawnFailure('opencode', tmpFile, error);
 
     expect(message).toContain('not marked executable');
+  });
+});
+
+describe('formatWatchdogTimeoutMessage', () => {
+  it('mentions longer startup for OpenCode', () => {
+    const message = formatWatchdogTimeoutMessage('opencode', 120000);
+    expect(message).toContain('OpenCode');
+    expect(message).toContain('120s');
+    expect(message).toContain('increase the project');
+  });
+
+  it('returns a generic watchdog timeout message for other providers', () => {
+    const message = formatWatchdogTimeoutMessage('claude', 60000);
+    expect(message).toContain('Claude Code');
+    expect(message).toContain('60s');
   });
 });

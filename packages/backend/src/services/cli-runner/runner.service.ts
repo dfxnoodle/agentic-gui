@@ -108,6 +108,12 @@ export const runnerService = {
     if (request.cliProvider === 'cursor') {
       effectiveConfig.watchdogTimeoutMs = Math.min(effectiveConfig.watchdogTimeoutMs, 30000);
     }
+    if (request.cliProvider === 'opencode') {
+      effectiveConfig.watchdogTimeoutMs = Math.min(
+        effectiveConfig.maxRuntimeMs,
+        Math.max(effectiveConfig.watchdogTimeoutMs, 120000),
+      );
+    }
 
     const readOnlyConfig = createReadOnlyCLIConfig(effectiveConfig);
 

@@ -6,6 +6,7 @@ import { conversationService } from '../services/conversation.service.js';
 import { runnerService } from '../services/cli-runner/runner.service.js';
 import { planService } from '../services/plan.service.js';
 import { sseService } from '../services/sse.service.js';
+import { CLI_DISPLAY_NAMES } from '@agentic-gui/shared';
 import type { Message, Project, UnifiedEvent } from '@agentic-gui/shared';
 import { FileStore } from '../store/file-store.js';
 import { getProjectsDir } from '../store/store-paths.js';
@@ -186,6 +187,12 @@ conversationRoutes.post('/:id/messages', requirePermission('send_message'), asyn
         await conversationService.addMessage(conversationId, 'assistant', result.fullText, assistantMetadata);
       } else if (result.error) {
         await conversationService.addMessage(conversationId, 'system', `Error: ${result.error}`);
+      } else {
+        const providerName = CLI_DISPLAY_NAMES[effectiveCLIProvider] ?? effectiveCLIProvider;
+        const fallbackMessage = result.exitCode === 0
+          ? `${providerName} completed without producing any output.`
+          : `${providerName} stopped before producing any output. Check the provider configuration or increase the watchdog timeout in project settings.`;
+        await conversationService.addMessage(conversationId, 'system', fallbackMessage);
       }
 
       const updatedConv = await conversationService.getById(conversationId);

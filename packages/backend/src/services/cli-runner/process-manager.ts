@@ -35,6 +35,17 @@ const COMMON_CLI_BIN_DIRS = [
   '/home/linuxbrew/.linuxbrew/bin',
 ];
 
+export function formatWatchdogTimeoutMessage(provider: CLIProvider, watchdogTimeoutMs: number): string {
+  const providerName = CLI_DISPLAY_NAMES[provider] ?? provider;
+  const seconds = Math.ceil(watchdogTimeoutMs / 1000);
+
+  if (provider === 'opencode') {
+    return `${providerName} produced no output for ${seconds}s and was stopped by the watchdog timer. OpenCode can take longer to start, so increase the project's watchdog timeout if needed.`;
+  }
+
+  return `${providerName} produced no output for ${seconds}s and was stopped by the watchdog timer.`;
+}
+
 export function withCommonCliBinPaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const currentPath = env.PATH ?? '';
   const pathParts = currentPath.split(path.delimiter).filter(Boolean);
@@ -86,6 +97,7 @@ export function spawnCLIProcess(
   const events = new EventEmitter();
   let killed = false;
   let emittedErrorEvent = false;
+  let terminationError: string | null = null;
 
   const childEnv: NodeJS.ProcessEnv = withCommonCliBinPaths(
     cmd.explicitEnv ?? { ...process.env, ...cmd.env },
@@ -112,6 +124,16 @@ export function spawnCLIProcess(
     watchdogTimer = setTimeout(() => {
       if (!killed) {
         killed = true;
+        terminationError = formatWatchdogTimeoutMessage(adapter.provider, options.watchdogTimeoutMs);
+        if (!emittedErrorEvent) {
+          emittedErrorEvent = true;
+          events.emit('event', {
+            type: 'error',
+            timestamp: new Date().toISOString(),
+            content: terminationError,
+            source: adapter.provider,
+          } satisfies UnifiedEvent);
+        }
         child.kill('SIGTERM');
         setTimeout(() => {
           if (!child.killed) child.kill('SIGKILL');
@@ -124,10 +146,12 @@ export function spawnCLIProcess(
   const runtimeTimer = setTimeout(() => {
     if (!killed) {
       killed = true;
+      terminationError = 'Process exceeded maximum runtime limit.';
+      emittedErrorEvent = true;
       events.emit('event', {
         type: 'error',
         timestamp: new Date().toISOString(),
-        content: 'Process exceeded maximum runtime limit.',
+        content: terminationError,
         source: adapter.provider,
       } satisfies UnifiedEvent);
       child.kill('SIGTERM');
@@ -180,11 +204,11 @@ export function spawnCLIProcess(
     stderr: string;
     stdout: string;
   }>((resolve) => {
-    child.on('close', (code) => {
+    child.on('close', (code, signal) => {
       if (watchdogTimer) clearTimeout(watchdogTimer);
       clearTimeout(runtimeTimer);
 
-      const baseErrorMsg = adapter.mapExitCode(code);
+      const baseErrorMsg = terminationError ?? adapter.mapExitCode(code);
       const stderrSummary = stderrBuffer.trim().split(/\r?\n/).filter(Boolean).slice(-5).join('\n');
       const errorMsg = baseErrorMsg && stderrSummary && !emittedErrorEvent
         ? `${baseErrorMsg}\n${stderrSummary}`
@@ -196,7 +220,7 @@ export function spawnCLIProcess(
         timestamp: new Date().toISOString(),
         content: errorMsg ?? 'Process completed.',
         source: adapter.provider,
-        metadata: { exitCode: code, stderr: stderrBuffer.slice(-2000) },
+        metadata: { exitCode: code, signal, stderr: stderrBuffer.slice(-2000) },
       } satisfies UnifiedEvent);
 
       resolve({
