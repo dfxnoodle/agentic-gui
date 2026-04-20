@@ -17,13 +17,13 @@ conversationRoutes.use(authMiddleware);
 
 const createSchema = z.object({
   projectId: z.string().min(1),
-  cliProvider: z.enum(['claude', 'codex', 'gemini', 'cursor']),
+  cliProvider: z.enum(['claude', 'codex', 'gemini', 'cursor', 'opencode']),
   title: z.string().optional(),
 });
 
 const messageSchema = z.object({
   content: z.string().min(1),
-  secondOpinionCliProvider: z.enum(['claude', 'codex', 'gemini', 'cursor']).optional(),
+  secondOpinionCliProvider: z.enum(['claude', 'codex', 'gemini', 'cursor', 'opencode']).optional(),
 });
 
 async function reconcileConversationState(conversationId: string) {

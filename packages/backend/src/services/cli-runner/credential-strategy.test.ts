@@ -30,6 +30,17 @@ describe('stripProviderSecretsFromEnv', () => {
     stripProviderSecretsFromEnv(env, 'claude');
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
   });
+
+  it('removes common provider keys for opencode', () => {
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      OPENAI_API_KEY: 'x',
+      ANTHROPIC_API_KEY: 'y',
+    };
+    stripProviderSecretsFromEnv(env, 'opencode');
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
 });
 
 describe('resolveCredentialAttempts', () => {
@@ -65,5 +76,9 @@ describe('resolveCredentialAttempts', () => {
     });
     expect(plan.attempts).toEqual([{ mode: 'platform' }]);
     expect(plan.platformApiKey).toBe('sk-test');
+  });
+
+  it('detects OpenCode auth failures from API key messages', () => {
+    expect(classifyAuthFailure('opencode', 1, 'missing api key for provider openai', '')).toBe(true);
   });
 });

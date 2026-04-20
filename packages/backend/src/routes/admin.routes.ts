@@ -135,7 +135,7 @@ adminRoutes.get('/cli-config/keys', requirePermission('configure_cli'), async (_
 });
 
 const setKeySchema = z.object({
-  provider: z.enum(['claude', 'codex', 'gemini', 'cursor']),
+  provider: z.enum(['claude', 'codex', 'gemini', 'cursor', 'opencode']),
   apiKey: z.string().min(1),
 });
 

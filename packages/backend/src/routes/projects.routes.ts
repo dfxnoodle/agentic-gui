@@ -16,7 +16,7 @@ projectRoutes.use(authMiddleware);
 const createSchema = z.object({
   name: z.string().min(1),
   rootPath: z.string().min(1),
-  cliProvider: z.enum(['claude', 'codex', 'gemini', 'cursor']),
+  cliProvider: z.enum(['claude', 'codex', 'gemini', 'cursor', 'opencode']),
   credentialPreference: z.enum(['local_first', 'platform_only']).optional(),
 });
 
@@ -72,7 +72,7 @@ projectRoutes.post('/', requirePermission('configure_projects'), async (req, res
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
   rootPath: z.string().min(1).optional(),
-  cliProvider: z.enum(['claude', 'codex', 'gemini', 'cursor']).optional(),
+  cliProvider: z.enum(['claude', 'codex', 'gemini', 'cursor', 'opencode']).optional(),
   credentialPreference: z.enum(['local_first', 'platform_only']).optional(),
   cliConfig: z.object({
     maxTurns: z.number().min(1).max(50).optional(),

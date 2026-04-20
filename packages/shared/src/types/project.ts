@@ -20,6 +20,7 @@ export interface AuthFieldDef {
   envVar: string;
   required?: boolean;
   placeholder?: string;
+  helpText?: string;
 }
 
 export interface AuthModeDef {

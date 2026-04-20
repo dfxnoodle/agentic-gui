@@ -1,5 +1,5 @@
 import { client } from './client';
-import type { Project } from '@agentic-gui/shared';
+import type { Project, CLIProvider } from '@agentic-gui/shared';
 
 export const projectsApi = {
   async list() {
@@ -12,7 +12,7 @@ export const projectsApi = {
     return data;
   },
 
-  async create(payload: { name: string; rootPath: string; cliProvider: string }) {
+  async create(payload: { name: string; rootPath: string; cliProvider: CLIProvider }) {
     const { data } = await client.post<Project>('/projects', payload);
     return data;
   },

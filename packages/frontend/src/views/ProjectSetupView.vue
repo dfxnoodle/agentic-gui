@@ -23,10 +23,9 @@
       <div class="form-group">
         <label>CLI Provider</label>
         <select v-model="editProvider">
-          <option value="claude">Claude Code</option>
-          <option value="codex">OpenAI Codex</option>
-          <option value="gemini">Gemini CLI</option>
-          <option value="cursor">Cursor CLI</option>
+          <option v-for="provider in providerOptions" :key="provider.id" :value="provider.id">
+            {{ provider.displayName }}
+          </option>
         </select>
       </div>
       <div class="form-group">
@@ -79,6 +78,7 @@
 import { ref, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { projectsApi } from '../api/projects.api';
+import { CLI_DISPLAY_NAMES, CLI_PROVIDERS } from '@agentic-gui/shared';
 import type { Project, CLIProvider, CredentialPreference } from '@agentic-gui/shared';
 import MemoryViewer from '../components/project/MemoryViewer.vue';
 import AgentsViewer from '../components/project/AgentsViewer.vue';
@@ -96,6 +96,7 @@ const editCredentialPreference = ref<CredentialPreference>('platform_only');
 const editConfig = ref({ maxTurns: 10 });
 const editRuntimeSec = ref(300);
 const editWatchdogSec = ref(60);
+const providerOptions = CLI_PROVIDERS.map((id) => ({ id, displayName: CLI_DISPLAY_NAMES[id] }));
 
 function loadFromProject(p: Project) {
   editName.value = p.name;

@@ -11,6 +11,7 @@ import { ClaudeAdapter } from './adapters/claude.adapter.js';
 import { CodexAdapter } from './adapters/codex.adapter.js';
 import { GeminiAdapter } from './adapters/gemini.adapter.js';
 import { CursorAdapter } from './adapters/cursor.adapter.js';
+import { OpenCodeAdapter } from './adapters/opencode.adapter.js';
 import { secretsService } from '../secrets.service.js';
 import { buildPrompt, readProjectContext, type PromptContext } from '../prompt-builder.service.js';
 import { config } from '../../config.js';
@@ -27,11 +28,15 @@ const adapters = new Map<CLIProvider, CLIAdapter>([
   ['codex', new CodexAdapter()],
   ['gemini', new GeminiAdapter()],
   ['cursor', new CursorAdapter()],
+  ['opencode', new OpenCodeAdapter()],
 ]);
 
 const concurrencyLimiter = new ConcurrencyLimiter(
   config.maxConcurrentJobs,
-  new Map([['cursor', 1]]),
+  new Map([
+    ['cursor', 1],
+    ['opencode', 1],
+  ]),
 );
 
 const activeJobs = new Map<string, ProcessHandle>();
@@ -84,7 +89,7 @@ export const runnerService = {
       throw Object.assign(
         new Error(
           `No credentials available for ${request.cliProvider}. Configure an API key in Settings (or environment), ` +
-            'set credential preference to local_first with CLI config under the project or home directory, or use Vertex AI for Gemini.',
+            'set credential preference to local_first with CLI config under the project or home directory, or use any supported alternative auth mode.',
         ),
         { status: 400 },
       );

@@ -1,4 +1,4 @@
-export type CLIProvider = 'claude' | 'codex' | 'gemini' | 'cursor';
+export type CLIProvider = 'claude' | 'codex' | 'gemini' | 'cursor' | 'opencode';
 
 export interface UnifiedEvent {
   type: 'thinking' | 'text' | 'tool_use' | 'tool_result' | 'error' | 'done' | 'progress';

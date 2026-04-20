@@ -3,6 +3,7 @@ import { ClaudeAdapter } from './adapters/claude.adapter.js';
 import { CodexAdapter } from './adapters/codex.adapter.js';
 import { GeminiAdapter } from './adapters/gemini.adapter.js';
 import { CursorAdapter } from './adapters/cursor.adapter.js';
+import { OpenCodeAdapter } from './adapters/opencode.adapter.js';
 import type { CLIConfig } from '@agentic-gui/shared';
 
 const baseConfig: CLIConfig = {
@@ -331,5 +332,74 @@ describe('CursorAdapter', () => {
       projectPath: '/p',
     });
     expect(env.CURSOR_API_KEY).toBe('cursor-key');
+  });
+});
+
+describe('OpenCodeAdapter', () => {
+  const adapter = new OpenCodeAdapter();
+
+  it('builds correct command', () => {
+    const cmd = adapter.buildCommand('hello', baseConfig, '/tmp/project', { readOnly: true });
+    expect(cmd.command).toBe('opencode');
+    expect(cmd.args).toContain('run');
+    expect(cmd.args).toContain('--format');
+    expect(cmd.args).toContain('json');
+    expect(cmd.args).toContain('hello');
+    expect(cmd.env.OPENCODE_PERMISSION).toContain('"bash":"deny"');
+  });
+
+  it('drops ad-hoc flags in read-only mode', () => {
+    const cmd = adapter.buildCommand('hello', writableConfig, '/tmp/project', { readOnly: true });
+    expect(cmd.args).not.toContain('--unsafe-flag');
+    expect(cmd.args).not.toContain('--full-auto');
+  });
+
+  it('parses text event', () => {
+    const event = adapter.parseEvent(JSON.stringify({
+      type: 'text',
+      part: { text: 'OpenCode reply' },
+    }));
+    expect(event!.type).toBe('text');
+    expect(event!.content).toBe('OpenCode reply');
+    expect(event!.source).toBe('opencode');
+  });
+
+  it('parses tool event', () => {
+    const event = adapter.parseEvent(JSON.stringify({
+      type: 'tool_use',
+      part: { tool: 'bash', state: { title: 'ls -la' } },
+    }));
+    expect(event!.type).toBe('tool_use');
+    expect(event!.content).toContain('bash');
+    expect(event!.content).toContain('ls -la');
+  });
+
+  it('parses step_start event as thinking', () => {
+    const event = adapter.parseEvent(JSON.stringify({
+      type: 'step_start',
+      part: { step: 2, title: 'Plan implementation' },
+    }));
+    expect(event!.type).toBe('thinking');
+    expect(event!.content).toContain('step 2');
+  });
+
+  it('parses error event', () => {
+    const event = adapter.parseEvent(JSON.stringify({
+      type: 'error',
+      error: { data: { message: 'Missing API key' } },
+    }));
+    expect(event!.type).toBe('error');
+    expect(event!.content).toBe('Missing API key');
+  });
+
+  it('getEnvVars sets isolation env in platform mode', () => {
+    const env = adapter.getEnvVars({
+      mode: 'platform',
+      apiKey: 'openai-key',
+      isolationDir: '/tmp',
+      projectPath: '/p',
+    });
+    expect(env.OPENCODE_DISABLE_AUTOUPDATE).toBe('true');
+    expect(env.XDG_CONFIG_HOME).toBe('/tmp/.config');
   });
 });

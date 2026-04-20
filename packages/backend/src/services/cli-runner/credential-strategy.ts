@@ -60,6 +60,30 @@ export async function detectLocalSetup(provider: CLIProvider, projectPath: strin
     case 'cursor':
       if (await pathExists(path.join(projectPath, '.cursor'))) return true;
       return pathExists(path.join(home, '.cursor'));
+    case 'opencode': {
+      const projectConfigCandidates = [
+        path.join(projectPath, 'opencode.json'),
+        path.join(projectPath, 'opencode.jsonc'),
+      ];
+      for (const candidate of projectConfigCandidates) {
+        if (await pathExists(candidate)) return true;
+      }
+      if (await isDir(path.join(projectPath, '.opencode'))) return true;
+
+      const configDir = path.join(home, '.config', 'opencode');
+      const legacyDataDir = path.join(home, '.local', 'share', 'opencode');
+      const homeCandidates = [
+        path.join(configDir, 'opencode.json'),
+        path.join(configDir, 'opencode.jsonc'),
+        path.join(legacyDataDir, 'opencode.json'),
+        path.join(legacyDataDir, 'opencode.jsonc'),
+        path.join(legacyDataDir, 'auth.json'),
+      ];
+      for (const candidate of homeCandidates) {
+        if (await pathExists(candidate)) return true;
+      }
+      return false;
+    }
     default:
       return false;
   }
@@ -71,6 +95,14 @@ export const PROVIDER_SECRET_ENV_VARS: Record<CLIProvider, readonly string[]> = 
   codex: ['CODEX_API_KEY', 'OPENAI_API_KEY'],
   gemini: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
   cursor: ['CURSOR_API_KEY'],
+  opencode: [
+    'OPENAI_API_KEY',
+    'ANTHROPIC_API_KEY',
+    'GEMINI_API_KEY',
+    'GOOGLE_API_KEY',
+    'GOOGLE_GENERATIVE_AI_API_KEY',
+    'OPENROUTER_API_KEY',
+  ],
 };
 
 export function stripProviderSecretsFromEnv(env: NodeJS.ProcessEnv, provider: CLIProvider): void {
@@ -115,6 +147,7 @@ export function classifyAuthFailure(
   if (provider === 'codex' && text.includes('openai') && text.includes('invalid')) return true;
   if (provider === 'gemini' && text.includes('api key') && text.includes('invalid')) return true;
   if (provider === 'cursor' && text.includes('api key')) return true;
+  if (provider === 'opencode' && text.includes('api key')) return true;
 
   return false;
 }

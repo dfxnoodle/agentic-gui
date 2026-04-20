@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { projectsApi } from '../api/projects.api';
-import type { Project } from '@agentic-gui/shared';
+import type { Project, CLIProvider } from '@agentic-gui/shared';
 
 export const useProjectStore = defineStore('project', () => {
   const projects = ref<Project[]>([]);
@@ -24,7 +24,7 @@ export const useProjectStore = defineStore('project', () => {
     activeProject.value = project;
   }
 
-  async function createProject(payload: { name: string; rootPath: string; cliProvider: string }) {
+  async function createProject(payload: { name: string; rootPath: string; cliProvider: CLIProvider }) {
     const project = await projectsApi.create(payload);
     projects.value.push(project);
     if (!activeProject.value) activeProject.value = project;

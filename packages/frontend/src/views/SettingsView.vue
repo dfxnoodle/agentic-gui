@@ -120,10 +120,9 @@
         <input :value="derivedProjectName" placeholder="Project name (auto)" readonly />
         <input v-model="newProject.rootPath" placeholder="/path/to/project" required />
         <select v-model="newProject.cliProvider">
-          <option value="claude">Claude Code</option>
-          <option value="codex">OpenAI Codex</option>
-          <option value="gemini">Gemini CLI</option>
-          <option value="cursor">Cursor CLI</option>
+          <option v-for="provider in providerList" :key="provider.id" :value="provider.id">
+            {{ provider.displayName }}
+          </option>
         </select>
         <button type="submit" class="btn-primary" :disabled="!derivedProjectName">Add Project</button>
       </form>
@@ -147,8 +146,8 @@
     </div>
 
     <div v-if="activeTab === 'cli' && canConfigureCli" class="tab-content">
-      <h3>CLI API Keys</h3>
-      <p class="hint">Configure fallback API keys for each CLI provider when using local-first credentials on a project, or when no project-local CLI config is detected. Environment variables take precedence over stored values.</p>
+      <h3>CLI Credentials</h3>
+      <p class="hint">Configure fallback credentials for each CLI provider when using local-first credentials on a project, or when no project-local CLI config is detected. Environment variables take precedence over stored values.</p>
 
       <div class="provider-config-list">
         <div v-for="provider in providerList" :key="provider.id" class="provider-config-card card">
@@ -188,7 +187,7 @@
                   class="btn-small toggle-vis"
                   @click="showSecrets[field.key] = !showSecrets[field.key]"
                 >{{ showSecrets[field.key] ? 'Hide' : 'Show' }}</button>
-                <div class="hint">Env: {{ field.envVar }}</div>
+                <div class="hint">{{ field.helpText || `Env: ${field.envVar}` }}</div>
               </div>
             </div>
 
@@ -248,7 +247,7 @@ const projects = ref(projectStore.projects);
 
 const newUser = ref({ username: '', password: '', displayName: '', role: '' });
 const newRole = ref<{ name: string; permissions: Permission[] }>({ name: '', permissions: [] });
-const newProject = ref({ rootPath: '', cliProvider: 'claude' });
+const newProject = ref<{ rootPath: string; cliProvider: CLIProvider }>({ rootPath: '', cliProvider: 'claude' });
 const rolesInfo = ref('');
 const creatingRole = ref(false);
 const savingRoleId = ref<string | null>(null);

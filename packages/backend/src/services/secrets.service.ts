@@ -9,6 +9,83 @@ interface Secrets {
   providerConfigs: Record<string, ProviderConfig>;
 }
 
+const OPENCODE_CONFIG_SCHEMA = 'https://opencode.ai/config.json';
+
+function buildOpenCodeInlineConfig(config: ProviderConfig): Record<string, unknown> | null {
+  const apiKey = config.fields.apiKey?.trim();
+
+  if (config.authMode === 'openrouter_api_key' && apiKey) {
+    return {
+      $schema: OPENCODE_CONFIG_SCHEMA,
+      provider: {
+        openrouter: {
+          options: {
+            apiKey,
+          },
+        },
+      },
+    };
+  }
+
+  if (config.authMode === 'ollama_local') {
+    const modelId = config.fields.modelId?.trim();
+    if (!modelId) return null;
+
+    const baseUrl = config.fields.baseUrl?.trim() || 'http://localhost:11434/v1';
+    const modelName = config.fields.modelName?.trim();
+
+    return {
+      $schema: OPENCODE_CONFIG_SCHEMA,
+      model: `ollama/${modelId}`,
+      provider: {
+        ollama: {
+          npm: '@ai-sdk/openai-compatible',
+          name: 'Ollama (local)',
+          options: {
+            baseURL: baseUrl,
+          },
+          models: {
+            [modelId]: modelName ? { name: modelName } : {},
+          },
+        },
+      },
+    };
+  }
+
+  return null;
+}
+
+export function buildOpenCodeProviderEnvVars(config: ProviderConfig): Record<string, string> {
+  const envVars: Record<string, string> = {};
+  const apiKey = config.fields.apiKey?.trim();
+
+  switch (config.authMode) {
+    case 'api_key':
+      if (apiKey) envVars.OPENAI_API_KEY = apiKey;
+      break;
+    case 'anthropic_api_key':
+      if (apiKey) envVars.ANTHROPIC_API_KEY = apiKey;
+      break;
+    case 'gemini_api_key':
+      if (apiKey) {
+        envVars.GOOGLE_GENERATIVE_AI_API_KEY = apiKey;
+        envVars.GOOGLE_API_KEY = apiKey;
+        envVars.GEMINI_API_KEY = apiKey;
+      }
+      break;
+    case 'openrouter_api_key':
+      if (apiKey) envVars.OPENROUTER_API_KEY = apiKey;
+      break;
+  }
+
+  const inlineConfig = buildOpenCodeInlineConfig(config);
+  if (inlineConfig) {
+    envVars.OPENCODE_CONFIG_CONTENT = JSON.stringify(inlineConfig);
+  }
+
+  return envVars;
+}
+
 async function readSecrets(): Promise<Secrets> {
   try {
     const raw = await fs.readFile(getSecretsPath(), 'utf-8');
@@ -31,50 +108,85 @@ async function writeSecrets(secrets: Secrets): Promise<void> {
 
 export const secretsService = {
   async validateProviderConfig(provider: string, config: ProviderConfig): Promise<void> {
-    if (provider !== 'gemini' || config.authMode !== 'vertex_ai') {
+    if (provider === 'gemini' && config.authMode === 'vertex_ai') {
+      const credentialsPath = config.fields.gcpCredentials?.trim();
+      if (!credentialsPath) {
+        return;
+      }
+
+      if (!path.isAbsolute(credentialsPath)) {
+        throw Object.assign(
+          new Error('Gemini Vertex AI credentials must be an absolute path to a service account JSON file, or be left blank to use Application Default Credentials.'),
+          { status: 400 },
+        );
+      }
+
+      try {
+        await fs.access(credentialsPath);
+      } catch {
+        throw Object.assign(
+          new Error(`Gemini Vertex AI credentials file was not found at ${credentialsPath}. Update the path or leave it blank to use Application Default Credentials.`),
+          { status: 400 },
+        );
+      }
       return;
     }
 
-    const credentialsPath = config.fields.gcpCredentials?.trim();
-    if (!credentialsPath) {
-      return;
-    }
+    if (provider === 'opencode' && config.authMode === 'ollama_local') {
+      const baseUrl = config.fields.baseUrl?.trim();
+      const modelId = config.fields.modelId?.trim();
 
-    if (!path.isAbsolute(credentialsPath)) {
-      throw Object.assign(
-        new Error('Gemini Vertex AI credentials must be an absolute path to a service account JSON file, or be left blank to use Application Default Credentials.'),
-        { status: 400 },
-      );
-    }
+      if (!baseUrl) {
+        throw Object.assign(new Error('OpenCode Ollama mode requires an Ollama base URL.'), { status: 400 });
+      }
 
-    try {
-      await fs.access(credentialsPath);
-    } catch {
-      throw Object.assign(
-        new Error(`Gemini Vertex AI credentials file was not found at ${credentialsPath}. Update the path or leave it blank to use Application Default Credentials.`),
-        { status: 400 },
-      );
+      if (!modelId) {
+        throw Object.assign(new Error('OpenCode Ollama mode requires a model ID.'), { status: 400 });
+      }
+
+      try {
+        new URL(baseUrl);
+      } catch {
+        throw Object.assign(
+          new Error(`OpenCode Ollama base URL "${baseUrl}" is not a valid URL.`),
+          { status: 400 },
+        );
+      }
     }
   },
 
   async getApiKey(provider: string): Promise<string | null> {
     // First check env vars
-    const envMap: Record<string, string> = {
+    const envMap: Record<string, string | string[]> = {
       claude: 'ANTHROPIC_API_KEY',
       codex: 'CODEX_API_KEY',
       gemini: 'GEMINI_API_KEY',
       cursor: 'CURSOR_API_KEY',
+      opencode: [
+        'OPENAI_API_KEY',
+        'ANTHROPIC_API_KEY',
+        'GOOGLE_GENERATIVE_AI_API_KEY',
+        'OPENROUTER_API_KEY',
+        'GEMINI_API_KEY',
+        'GOOGLE_API_KEY',
+      ],
     };
 
     const envKey = envMap[provider];
-    if (envKey && process.env[envKey]) {
+    if (Array.isArray(envKey)) {
+      for (const key of envKey) {
+        if (process.env[key]) {
+          return process.env[key]!;
+        }
+      }
+    } else if (envKey && process.env[envKey]) {
       return process.env[envKey]!;
     }
 
-    // Check provider config for api_key mode
+    // Check provider config for saved API key fields
     const secrets = await readSecrets();
     const config = secrets.providerConfigs[provider];
-    if (config?.authMode === 'api_key' && config.fields.apiKey) {
+    if (config?.fields.apiKey) {
       return config.fields.apiKey;
     }
 
@@ -116,6 +228,10 @@ export const secretsService = {
     if (!modeDef) return {};
 
     const envVars: Record<string, string> = {};
+
+    if (provider === 'opencode') {
+      return buildOpenCodeProviderEnvVars(config);
+    }
 
     // For Vertex AI, set the mode flag
     if (config.authMode === 'vertex_ai') {
@@ -168,7 +284,7 @@ export const secretsService = {
 
   async getMaskedKeys(): Promise<Record<string, string | null>> {
     const result: Record<string, string | null> = {};
-    for (const provider of ['claude', 'codex', 'gemini', 'cursor']) {
+    for (const provider of ['claude', 'codex', 'gemini', 'cursor', 'opencode']) {
       const key = await this.getApiKey(provider);
       result[provider] = key ? `${key.slice(0, 6)}...${key.slice(-4)}` : null;
     }

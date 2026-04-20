@@ -1,4 +1,4 @@
-import type { Plan, ContradictionCheck, CLIConfig, CredentialPreference } from '@agentic-gui/shared';
+import type { Plan, ContradictionCheck, CLIConfig, CredentialPreference, CLIProvider } from '@agentic-gui/shared';
 import { runnerService } from './cli-runner/runner.service.js';
 import { memoryService } from './memory.service.js';
 
@@ -10,7 +10,7 @@ export const contradictionService = {
   async check(
     plan: Plan,
     projectPath: string,
-    cliProvider: Plan['projectId'] extends string ? 'claude' | 'codex' | 'gemini' | 'cursor' : never,
+    cliProvider: CLIProvider,
     cliConfig: CLIConfig,
     credentialPreference?: CredentialPreference,
   ): Promise<ContradictionCheck> {
