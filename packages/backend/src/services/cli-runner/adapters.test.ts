@@ -348,6 +348,22 @@ describe('OpenCodeAdapter', () => {
     expect(cmd.env.OPENCODE_PERMISSION).toContain('"bash":"deny"');
   });
 
+  it('uses OPENCODE_BIN when configured', () => {
+    const original = process.env.OPENCODE_BIN;
+    process.env.OPENCODE_BIN = '/custom/bin/opencode';
+
+    try {
+      const cmd = adapter.buildCommand('hello', baseConfig, '/tmp/project');
+      expect(cmd.command).toBe('/custom/bin/opencode');
+    } finally {
+      if (original === undefined) {
+        delete process.env.OPENCODE_BIN;
+      } else {
+        process.env.OPENCODE_BIN = original;
+      }
+    }
+  });
+
   it('drops ad-hoc flags in read-only mode', () => {
     const cmd = adapter.buildCommand('hello', writableConfig, '/tmp/project', { readOnly: true });
     expect(cmd.args).not.toContain('--unsafe-flag');

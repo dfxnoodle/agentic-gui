@@ -1,8 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { EventEmitter } from 'node:events';
+import os from 'node:os';
+import path from 'node:path';
 import type { CLIAdapter, SpawnCommand } from './base-adapter.js';
-import type { UnifiedEvent } from '@agentic-gui/shared';
+import { CLI_DISPLAY_NAMES, type UnifiedEvent, type CLIProvider } from '@agentic-gui/shared';
 
 export interface ProcessManagerOptions {
   /** Kill process if no output for this many ms */
@@ -24,6 +26,38 @@ export interface ProcessHandle {
   completed: Promise<{ exitCode: number | null; error?: string; stderr?: string; stdout?: string }>;
 }
 
+const COMMON_CLI_BIN_DIRS = [
+  path.join(os.homedir(), '.local', 'bin'),
+  path.join(os.homedir(), 'bin'),
+  '/usr/local/bin',
+  '/opt/homebrew/bin',
+  '/home/linuxbrew/.linuxbrew/bin',
+];
+
+export function withCommonCliBinPaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const currentPath = env.PATH ?? '';
+  const pathParts = currentPath.split(path.delimiter).filter(Boolean);
+  const merged = [...COMMON_CLI_BIN_DIRS, ...pathParts];
+  const unique = merged.filter((part, index) => merged.indexOf(part) === index);
+
+  return {
+    ...env,
+    PATH: unique.join(path.delimiter),
+  };
+}
+
+export function formatSpawnFailure(provider: CLIProvider, command: string, err: NodeJS.ErrnoException): string {
+  if (err.code === 'ENOENT') {
+    const providerName = CLI_DISPLAY_NAMES[provider] ?? provider;
+    const pathHint = provider === 'opencode'
+      ? ' Install OpenCode and ensure the binary is on PATH, or set OPENCODE_BIN to the absolute binary path before starting the backend.'
+      : ' Install the CLI and ensure the backend PATH includes its install directory.';
+    return `${providerName} executable "${command}" was not found.${pathHint}`;
+  }
+
+  return `Failed to start CLI process: ${err.message}`;
+}
+
 export function spawnCLIProcess(
   jobId: string,
   adapter: CLIAdapter,
@@ -34,7 +68,9 @@ export function spawnCLIProcess(
   let killed = false;
   let emittedErrorEvent = false;
 
-  const childEnv: NodeJS.ProcessEnv = cmd.explicitEnv ?? { ...process.env, ...cmd.env };
+  const childEnv: NodeJS.ProcessEnv = withCommonCliBinPaths(
+    cmd.explicitEnv ?? { ...process.env, ...cmd.env },
+  );
 
   const child: ChildProcess = spawn(cmd.command, cmd.args, {
     cwd: cmd.cwd,
@@ -156,14 +192,17 @@ export function spawnCLIProcess(
       if (watchdogTimer) clearTimeout(watchdogTimer);
       clearTimeout(runtimeTimer);
 
+      const spawnError = err as NodeJS.ErrnoException;
+      const errorContent = formatSpawnFailure(adapter.provider, cmd.command, spawnError);
+
       events.emit('event', {
         type: 'error',
         timestamp: new Date().toISOString(),
-        content: `Failed to start CLI process: ${err.message}`,
+        content: errorContent,
         source: adapter.provider,
       } satisfies UnifiedEvent);
 
-      resolve({ exitCode: null, error: err.message, stderr: stderrBuffer, stdout: stdoutBuffer });
+      resolve({ exitCode: null, error: errorContent, stderr: stderrBuffer, stdout: stdoutBuffer });
     });
   });
 

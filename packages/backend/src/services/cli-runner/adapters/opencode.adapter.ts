@@ -86,6 +86,7 @@ export class OpenCodeAdapter implements CLIAdapter {
   readonly provider = 'opencode' as const;
 
   buildCommand(prompt: string, config: CLIConfig, projectPath: string, options: CommandBuildOptions = {}): SpawnCommand {
+    const command = process.env.OPENCODE_BIN?.trim() || 'opencode';
     const args = [
       'run',
       '--format', 'json',
@@ -98,7 +99,7 @@ export class OpenCodeAdapter implements CLIAdapter {
     args.push(prompt);
 
     return {
-      command: 'opencode',
+      command,
       args,
       env: options.readOnly ? { OPENCODE_PERMISSION: READ_ONLY_PERMISSIONS } : {},
       cwd: projectPath,

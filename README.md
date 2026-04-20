@@ -368,6 +368,7 @@ The generated deployment notes assume:
 - Cursor CLI runs are intentionally throttled to one concurrent job because the adapter accounts for known headless reliability issues.
 - Gemini streaming must use `--output-format stream-json`.
 - Provider secrets are masked when returned to the frontend admin screens.
+- If OpenCode is installed but not visible to the backend process, set `OPENCODE_BIN` in the root `.env` to the absolute binary path. The backend also prepends common user bin directories such as `~/.local/bin` when spawning CLIs.
 
 ## Workspace References
 
