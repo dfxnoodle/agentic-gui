@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { nanoid } from 'nanoid';
-import type { CLIProvider, CLIConfig, UnifiedEvent, CredentialPreference } from '@agentic-gui/shared';
+import type { CLIProvider, CLIConfig, UnifiedEvent, CredentialPreference, ProviderConfig } from '@agentic-gui/shared';
 import type { CLIAdapter } from './base-adapter.js';
 import { spawnCLIProcess, type ProcessHandle } from './process-manager.js';
 import { ConcurrencyLimiter } from './concurrency-limiter.js';
@@ -61,6 +61,31 @@ export interface RunJobResult {
 
 const CURSOR_HANG_MAX_RETRIES = 2;
 
+export function applyProviderRuntimeDefaults(
+  provider: CLIProvider,
+  cliConfig: CLIConfig,
+  providerConfig: ProviderConfig | null,
+): CLIConfig {
+  const effectiveConfig = { ...cliConfig };
+
+  if (provider === 'cursor') {
+    effectiveConfig.watchdogTimeoutMs = Math.min(effectiveConfig.watchdogTimeoutMs, 30000);
+  }
+
+  if (provider === 'opencode') {
+    if (providerConfig?.authMode === 'ollama_local') {
+      effectiveConfig.watchdogTimeoutMs = effectiveConfig.maxRuntimeMs;
+    } else {
+      effectiveConfig.watchdogTimeoutMs = Math.min(
+        effectiveConfig.maxRuntimeMs,
+        Math.max(effectiveConfig.watchdogTimeoutMs, 120000),
+      );
+    }
+  }
+
+  return effectiveConfig;
+}
+
 export const runnerService = {
   async runJob(request: RunJobRequest): Promise<RunJobResult> {
     const adapter = adapters.get(request.cliProvider);
@@ -104,16 +129,11 @@ export const runnerService = {
       userMessage: request.userMessage,
     });
 
-    const effectiveConfig = { ...request.cliConfig };
-    if (request.cliProvider === 'cursor') {
-      effectiveConfig.watchdogTimeoutMs = Math.min(effectiveConfig.watchdogTimeoutMs, 30000);
-    }
-    if (request.cliProvider === 'opencode') {
-      effectiveConfig.watchdogTimeoutMs = Math.min(
-        effectiveConfig.maxRuntimeMs,
-        Math.max(effectiveConfig.watchdogTimeoutMs, 120000),
-      );
-    }
+    const effectiveConfig = applyProviderRuntimeDefaults(
+      request.cliProvider,
+      request.cliConfig,
+      providerConfig,
+    );
 
     const readOnlyConfig = createReadOnlyCLIConfig(effectiveConfig);
 
