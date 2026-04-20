@@ -46,6 +46,18 @@ export async function createReadOnlyWorkspaceSnapshot(projectPath: string, isola
   return snapshotPath;
 }
 
+export async function getWorkspaceFingerprint(projectPath: string): Promise<string> {
+  const stats = {
+    files: 0,
+    dirs: 0,
+    bytes: 0,
+    latestMtimeMs: 0,
+  };
+
+  await collectWorkspaceStats(projectPath, stats);
+  return `${stats.files}:${stats.dirs}:${stats.bytes}:${Math.round(stats.latestMtimeMs)}`;
+}
+
 async function copyDirectory(sourceDir: string, destinationDir: string): Promise<void> {
   await fs.mkdir(destinationDir, { recursive: true });
 
@@ -78,6 +90,62 @@ async function copyDirectory(sourceDir: string, destinationDir: string): Promise
     if (entry.isFile()) {
       try {
         await fs.copyFile(sourcePath, destinationPath);
+      } catch (error) {
+        if (isSkippableFsError(error)) {
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
+}
+
+async function collectWorkspaceStats(
+  sourceDir: string,
+  stats: { files: number; dirs: number; bytes: number; latestMtimeMs: number },
+): Promise<void> {
+  let entries;
+  try {
+    entries = await fs.readdir(sourceDir, { withFileTypes: true });
+  } catch (error) {
+    if (isSkippableFsError(error)) {
+      return;
+    }
+    throw error;
+  }
+
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+
+    if (entry.isSymbolicLink()) {
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      if (EXCLUDED_DIRS.has(entry.name)) {
+        continue;
+      }
+
+      stats.dirs++;
+      try {
+        const dirStat = await fs.stat(sourcePath);
+        stats.latestMtimeMs = Math.max(stats.latestMtimeMs, dirStat.mtimeMs);
+      } catch (error) {
+        if (!isSkippableFsError(error)) {
+          throw error;
+        }
+      }
+
+      await collectWorkspaceStats(sourcePath, stats);
+      continue;
+    }
+
+    if (entry.isFile()) {
+      try {
+        const fileStat = await fs.stat(sourcePath);
+        stats.files++;
+        stats.bytes += fileStat.size;
+        stats.latestMtimeMs = Math.max(stats.latestMtimeMs, fileStat.mtimeMs);
       } catch (error) {
         if (isSkippableFsError(error)) {
           continue;

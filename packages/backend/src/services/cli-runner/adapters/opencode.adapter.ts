@@ -23,10 +23,21 @@ interface OpenCodePart {
 }
 
 const READ_ONLY_PERMISSIONS = JSON.stringify({
+  '*': 'allow',
   bash: 'deny',
   edit: 'deny',
-  write: 'deny',
+  external_directory: 'deny',
 });
+
+export function resolveOpenCodeCommand(): string {
+  return process.env.OPENCODE_BIN?.trim() || 'opencode';
+}
+
+export function getOpenCodeReadOnlyEnv(): Record<string, string> {
+  return {
+    OPENCODE_PERMISSION: READ_ONLY_PERMISSIONS,
+  };
+}
 
 function getIsolationXdgEnv(isolationDir: string): Record<string, string> {
   return {
@@ -79,18 +90,23 @@ function getErrorMessage(raw: unknown): string {
 /**
  * OpenCode CLI adapter.
  *
- * Spawns: opencode run --format json "<prompt>"
+ * Spawns: opencode run --format json [--attach <server>] "<prompt>"
  * Output: JSONL events on stdout.
  */
 export class OpenCodeAdapter implements CLIAdapter {
   readonly provider = 'opencode' as const;
 
   buildCommand(prompt: string, config: CLIConfig, projectPath: string, options: CommandBuildOptions = {}): SpawnCommand {
-    const command = process.env.OPENCODE_BIN?.trim() || 'opencode';
+    const command = resolveOpenCodeCommand();
     const args = [
       'run',
       '--format', 'json',
+      '--dangerously-skip-permissions',
     ];
+
+    if (options.attachUrl) {
+      args.push('--attach', options.attachUrl);
+    }
 
     if (!options.readOnly && config.additionalFlags?.length) {
       args.push(...config.additionalFlags);
@@ -101,7 +117,7 @@ export class OpenCodeAdapter implements CLIAdapter {
     return {
       command,
       args,
-      env: options.readOnly ? { OPENCODE_PERMISSION: READ_ONLY_PERMISSIONS } : {},
+      env: options.readOnly ? getOpenCodeReadOnlyEnv() : {},
       cwd: projectPath,
     };
   }

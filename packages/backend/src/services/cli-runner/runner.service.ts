@@ -11,11 +11,12 @@ import { ClaudeAdapter } from './adapters/claude.adapter.js';
 import { CodexAdapter } from './adapters/codex.adapter.js';
 import { GeminiAdapter } from './adapters/gemini.adapter.js';
 import { CursorAdapter } from './adapters/cursor.adapter.js';
-import { OpenCodeAdapter } from './adapters/opencode.adapter.js';
+import { OpenCodeAdapter, getOpenCodeReadOnlyEnv, resolveOpenCodeCommand } from './adapters/opencode.adapter.js';
 import { secretsService } from '../secrets.service.js';
 import { buildPrompt, readProjectContext, type PromptContext } from '../prompt-builder.service.js';
 import { config } from '../../config.js';
 import { createReadOnlyCLIConfig, createReadOnlyWorkspaceSnapshot } from './read-only-workspace.js';
+import { ensureOpenCodeServer, disposeAllOpenCodeServers } from './opencode-server.js';
 import {
   resolveCredentialAttempts,
   stripProviderSecretsFromEnv,
@@ -268,6 +269,41 @@ export const runnerService = {
     return last!;
   },
 
+  async _buildChildEnv(
+    request: RunJobRequest,
+    adapter: CLIAdapter,
+    credentialMode: 'local' | 'platform',
+    platformApiKey: string,
+    isolationDir: string,
+    commandEnv: Record<string, string> = {},
+    providerEnvVars?: Record<string, string>,
+  ): Promise<NodeJS.ProcessEnv> {
+    const envVars = adapter.getEnvVars({
+      mode: credentialMode,
+      apiKey: platformApiKey,
+      isolationDir,
+      projectPath: request.projectPath,
+    });
+
+    const childEnv: NodeJS.ProcessEnv = { ...process.env };
+    childEnv.HOME = isolationDir;
+
+    if (credentialMode === 'local') {
+      stripProviderSecretsFromEnv(childEnv, request.cliProvider);
+    }
+
+    Object.assign(childEnv, commandEnv, envVars);
+
+    if (credentialMode === 'platform') {
+      Object.assign(
+        childEnv,
+        providerEnvVars ?? await secretsService.getProviderEnvVars(request.cliProvider),
+      );
+    }
+
+    return childEnv;
+  },
+
   async _runSingleSpawn(
     request: RunJobRequest,
     adapter: CLIAdapter,
@@ -284,38 +320,107 @@ export const runnerService = {
     stdout: string;
   }> {
     const jobId = nanoid();
+
+    if (request.cliProvider === 'opencode') {
+      const platformProviderEnvVars = credentialMode === 'platform'
+        ? await secretsService.getProviderEnvVars(request.cliProvider)
+        : undefined;
+      const localEnvSignature = credentialMode === 'local'
+        ? (() => {
+          const localEnvVars = adapter.getEnvVars({
+          mode: credentialMode,
+          apiKey: platformApiKey,
+          isolationDir: '__signature__',
+          projectPath: request.projectPath,
+          });
+          return {
+            XDG_CONFIG_HOME: localEnvVars.XDG_CONFIG_HOME ?? null,
+            XDG_DATA_HOME: localEnvVars.XDG_DATA_HOME ?? null,
+            OPENCODE_CONFIG: localEnvVars.OPENCODE_CONFIG ?? null,
+          };
+        })()
+        : null;
+      const serverSignature = JSON.stringify({
+        credentialMode,
+        command: resolveOpenCodeCommand(),
+        providerEnvVars: platformProviderEnvVars ?? null,
+        localEnvSignature,
+      });
+
+      await concurrencyLimiter.acquire(request.cliProvider);
+
+      try {
+        const server = await ensureOpenCodeServer({
+          projectPath: request.projectPath,
+          serverSignature,
+          command: resolveOpenCodeCommand(),
+          getChildEnv: async (isolationDir) => runnerService._buildChildEnv(
+            request,
+            adapter,
+            credentialMode,
+            platformApiKey,
+            isolationDir,
+            getOpenCodeReadOnlyEnv(),
+            platformProviderEnvVars,
+          ),
+        });
+
+        const cmd = adapter.buildCommand(fullPrompt, effectiveConfig, server.workspacePath, {
+          readOnly: true,
+          attachUrl: server.baseUrl,
+        });
+        cmd.explicitEnv = await runnerService._buildChildEnv(
+          request,
+          adapter,
+          credentialMode,
+          platformApiKey,
+          server.isolationDir,
+          cmd.env,
+          platformProviderEnvVars,
+        );
+
+        const handle = spawnCLIProcess(jobId, adapter, cmd, {
+          watchdogTimeoutMs: effectiveConfig.watchdogTimeoutMs,
+          maxRuntimeMs: effectiveConfig.maxRuntimeMs,
+        });
+
+        activeJobs.set(jobId, handle);
+
+        let fullText = '';
+        handle.events.on('event', (event: UnifiedEvent) => {
+          if (event.type === 'text') {
+            fullText += event.content;
+          }
+          aggregatedEvents.emit('event', event);
+        });
+
+        const result = await handle.completed;
+        activeJobs.delete(jobId);
+
+        return {
+          exitCode: result.exitCode,
+          error: result.error,
+          fullText,
+          stderr: result.stderr ?? '',
+          stdout: result.stdout ?? '',
+        };
+      } finally {
+        concurrencyLimiter.release(request.cliProvider);
+      }
+    }
+
     const isolationDir = path.join(os.tmpdir(), `agentic-gui-${jobId}`);
     await fs.mkdir(isolationDir, { recursive: true });
     const workspacePath = await createReadOnlyWorkspaceSnapshot(request.projectPath, isolationDir);
-
-    const envVars = adapter.getEnvVars({
-      mode: credentialMode,
-      apiKey: platformApiKey,
-      isolationDir,
-      projectPath: request.projectPath,
-    });
-
     const cmd = adapter.buildCommand(fullPrompt, effectiveConfig, workspacePath, { readOnly: true });
-
-    // Local mode strips inherited API keys so workspace/home CLI login is used; avoid on untrusted shared hosts.
-    const childEnv: NodeJS.ProcessEnv = { ...process.env };
-
-    // Point HOME to the writable isolation dir so CLIs (e.g. Gemini) that
-    // create config under $HOME don't fail with EACCES on read-only dirs
-    // like /var/www when running as a system service.
-    childEnv.HOME = isolationDir;
-
-    if (credentialMode === 'local') {
-      stripProviderSecretsFromEnv(childEnv, request.cliProvider);
-    }
-    Object.assign(childEnv, cmd.env, envVars);
-
-    if (credentialMode === 'platform') {
-      const providerEnvVars = await secretsService.getProviderEnvVars(request.cliProvider);
-      Object.assign(childEnv, providerEnvVars);
-    }
-
-    cmd.explicitEnv = childEnv;
+    cmd.explicitEnv = await runnerService._buildChildEnv(
+      request,
+      adapter,
+      credentialMode,
+      platformApiKey,
+      isolationDir,
+      cmd.env,
+    );
 
     await concurrencyLimiter.acquire(request.cliProvider);
 
@@ -378,10 +483,12 @@ process.on('SIGTERM', () => {
   for (const handle of activeJobs.values()) {
     handle.kill();
   }
+  void disposeAllOpenCodeServers();
 });
 
 process.on('SIGINT', () => {
   for (const handle of activeJobs.values()) {
     handle.kill();
   }
+  void disposeAllOpenCodeServers();
 });

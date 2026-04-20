@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CLIConfig } from '@agentic-gui/shared';
-import { createReadOnlyCLIConfig, createReadOnlyWorkspaceSnapshot } from './read-only-workspace.js';
+import { createReadOnlyCLIConfig, createReadOnlyWorkspaceSnapshot, getWorkspaceFingerprint } from './read-only-workspace.js';
 
 const tempDirs: string[] = [];
 
@@ -132,5 +132,22 @@ describe('createReadOnlyWorkspaceSnapshot', () => {
     await expect(fs.access(path.join(snapshotPath, 'node_modules'))).rejects.toThrow();
     await expect(fs.access(path.join(snapshotPath, '.git'))).rejects.toThrow();
     await expect(fs.access(path.join(snapshotPath, 'dist'))).rejects.toThrow();
+  });
+});
+
+describe('getWorkspaceFingerprint', () => {
+  it('changes when tracked workspace files change', async () => {
+    const sourceDir = await createTempDir('readonly-source-');
+    const trackedFile = path.join(sourceDir, 'src', 'index.ts');
+
+    await fs.mkdir(path.dirname(trackedFile), { recursive: true });
+    await fs.writeFile(trackedFile, 'export const value = 1;\n', 'utf-8');
+
+    const before = await getWorkspaceFingerprint(sourceDir);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await fs.writeFile(trackedFile, 'export const value = 2;\n', 'utf-8');
+    const after = await getWorkspaceFingerprint(sourceDir);
+
+    expect(after).not.toBe(before);
   });
 });

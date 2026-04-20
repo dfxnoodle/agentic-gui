@@ -344,8 +344,20 @@ describe('OpenCodeAdapter', () => {
     expect(cmd.args).toContain('run');
     expect(cmd.args).toContain('--format');
     expect(cmd.args).toContain('json');
+    expect(cmd.args).toContain('--dangerously-skip-permissions');
     expect(cmd.args).toContain('hello');
     expect(cmd.env.OPENCODE_PERMISSION).toContain('"bash":"deny"');
+    expect(cmd.env.OPENCODE_PERMISSION).toContain('"external_directory":"deny"');
+  });
+
+  it('builds attach command for persistent server mode', () => {
+    const cmd = adapter.buildCommand('hello', baseConfig, '/tmp/project', {
+      readOnly: true,
+      attachUrl: 'http://127.0.0.1:4096',
+    });
+
+    expect(cmd.args).toContain('--attach');
+    expect(cmd.args).toContain('http://127.0.0.1:4096');
   });
 
   it('uses OPENCODE_BIN when configured', () => {

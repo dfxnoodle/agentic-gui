@@ -11,6 +11,7 @@ export interface SpawnCommand {
 
 export interface CommandBuildOptions {
   readOnly?: boolean;
+  attachUrl?: string;
 }
 
 export interface GetEnvVarsOptions {
