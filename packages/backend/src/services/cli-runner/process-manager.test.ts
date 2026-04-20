@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { formatSpawnFailure, withCommonCliBinPaths } from './process-manager.js';
 
@@ -22,6 +25,27 @@ describe('formatSpawnFailure', () => {
     const error = Object.assign(new Error('permission denied'), { code: 'EACCES' }) as NodeJS.ErrnoException;
     const message = formatSpawnFailure('opencode', 'opencode', error);
 
-    expect(message).toBe('Failed to start CLI process: permission denied');
+    expect(message).toContain('permissions error');
+  });
+
+  it('explains when OPENCODE_BIN points to a directory', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencode-dir-'));
+    const error = Object.assign(new Error(`spawn ${tmpDir} EACCES`), { code: 'EACCES' }) as NodeJS.ErrnoException;
+
+    const message = formatSpawnFailure('opencode', tmpDir, error);
+
+    expect(message).toContain('is a directory');
+  });
+
+  it('explains when OPENCODE_BIN is not executable', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencode-file-'));
+    const tmpFile = path.join(tmpDir, 'opencode');
+    fs.writeFileSync(tmpFile, '#!/bin/sh\necho test\n', 'utf8');
+    fs.chmodSync(tmpFile, 0o644);
+
+    const error = Object.assign(new Error(`spawn ${tmpFile} EACCES`), { code: 'EACCES' }) as NodeJS.ErrnoException;
+    const message = formatSpawnFailure('opencode', tmpFile, error);
+
+    expect(message).toContain('not marked executable');
   });
 });

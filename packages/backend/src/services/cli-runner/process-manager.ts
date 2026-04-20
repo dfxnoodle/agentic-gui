@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { CLIAdapter, SpawnCommand } from './base-adapter.js';
@@ -47,12 +48,30 @@ export function withCommonCliBinPaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv
 }
 
 export function formatSpawnFailure(provider: CLIProvider, command: string, err: NodeJS.ErrnoException): string {
+  const providerName = CLI_DISPLAY_NAMES[provider] ?? provider;
+
   if (err.code === 'ENOENT') {
-    const providerName = CLI_DISPLAY_NAMES[provider] ?? provider;
     const pathHint = provider === 'opencode'
       ? ' Install OpenCode and ensure the binary is on PATH, or set OPENCODE_BIN to the absolute binary path before starting the backend.'
       : ' Install the CLI and ensure the backend PATH includes its install directory.';
     return `${providerName} executable "${command}" was not found.${pathHint}`;
+  }
+
+  if (err.code === 'EACCES') {
+    try {
+      const stats = fs.statSync(command);
+      if (stats.isDirectory()) {
+        return `${providerName} could not start because "${command}" is a directory, not an executable. Point OPENCODE_BIN at the actual binary file (for example, ".../opencode"), then restart the backend.`;
+      }
+
+      fs.accessSync(command, fs.constants.X_OK);
+    } catch (accessErr) {
+      if ((accessErr as NodeJS.ErrnoException).code === 'EACCES') {
+        return `${providerName} could not start because "${command}" is not marked executable. Fix the file permissions or point OPENCODE_BIN at an executable binary, then restart the backend.`;
+      }
+    }
+
+    return `${providerName} could not start "${command}" due to a permissions error. If you set OPENCODE_BIN, make sure it points to the executable file itself, not its containing directory.`;
   }
 
   return `Failed to start CLI process: ${err.message}`;
