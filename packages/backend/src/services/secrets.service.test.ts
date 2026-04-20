@@ -50,8 +50,24 @@ describe('buildOpenCodeProviderEnvVars', () => {
     const config = JSON.parse(env.OPENCODE_CONFIG_CONTENT!);
     expect(config.model).toBe('ollama/qwen2.5-coder:7b');
     expect(config.provider.ollama.options.baseURL).toBe('http://localhost:11434/v1');
+    expect(config.provider.ollama.options.apiKey).toBe('ollama');
     expect(config.provider.ollama.models['qwen2.5-coder:7b']).toEqual({
       name: 'Qwen 2.5 Coder 7B',
+      tool_call: true,
+      reasoning: true,
     });
+  });
+
+  it('defaults the Ollama model display name to the model id', () => {
+    const env = buildOpenCodeProviderEnvVars({
+      authMode: 'ollama_local',
+      fields: {
+        baseUrl: 'http://localhost:11434/v1',
+        modelId: 'qwen3:8b-q4_K_M',
+      },
+    });
+
+    const config = JSON.parse(env.OPENCODE_CONFIG_CONTENT!);
+    expect(config.provider.ollama.models['qwen3:8b-q4_K_M'].name).toBe('qwen3:8b-q4_K_M');
   });
 });

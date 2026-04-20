@@ -32,7 +32,7 @@ function buildOpenCodeInlineConfig(config: ProviderConfig): Record<string, unkno
     if (!modelId) return null;
 
     const baseUrl = config.fields.baseUrl?.trim() || 'http://localhost:11434/v1';
-    const modelName = config.fields.modelName?.trim();
+    const modelName = config.fields.modelName?.trim() || modelId;
 
     return {
       $schema: OPENCODE_CONFIG_SCHEMA,
@@ -43,9 +43,14 @@ function buildOpenCodeInlineConfig(config: ProviderConfig): Record<string, unkno
           name: 'Ollama (local)',
           options: {
             baseURL: baseUrl,
+            apiKey: 'ollama',
           },
           models: {
-            [modelId]: modelName ? { name: modelName } : {},
+            [modelId]: {
+              name: modelName,
+              tool_call: true,
+              reasoning: true,
+            },
           },
         },
       },

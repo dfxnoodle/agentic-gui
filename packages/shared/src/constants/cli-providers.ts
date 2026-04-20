@@ -106,7 +106,7 @@ export const CLI_AUTH_MODES: Record<CLIProvider, AuthModeDef[]> = {
           envVar: 'OPENCODE_CONFIG_CONTENT',
           required: true,
           placeholder: 'qwen2.5-coder:7b',
-          helpText: 'OpenCode inline config: model and provider.ollama.models',
+          helpText: 'OpenCode inline config: model and provider.ollama.models. Prefer code-oriented models; avoid vision-only models here.',
         },
         {
           key: 'modelName',
