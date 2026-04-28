@@ -14,7 +14,7 @@ export const config = {
   // CLI defaults
   defaultMaxTurns: parseInt(process.env.DEFAULT_MAX_TURNS ?? '10', 10),
   defaultMaxRuntimeMs: parseInt(process.env.DEFAULT_MAX_RUNTIME_MS ?? '300000', 10),
-  defaultWatchdogTimeoutMs: parseInt(process.env.DEFAULT_WATCHDOG_TIMEOUT_MS ?? '60000', 10),
+  defaultWatchdogTimeoutMs: parseInt(process.env.DEFAULT_WATCHDOG_TIMEOUT_MS ?? '180000', 10),
   maxConcurrentJobs: parseInt(process.env.MAX_CONCURRENT_JOBS ?? '3', 10),
 
   /** When a project has no `credentialPreference`, use this (platform_only preserves legacy behavior). */

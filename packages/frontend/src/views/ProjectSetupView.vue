@@ -63,7 +63,7 @@
       </div>
       <div class="form-group">
         <label>Watchdog Timeout (seconds)</label>
-        <input v-model.number="editWatchdogSec" type="number" min="10" max="120" />
+        <input v-model.number="editWatchdogSec" type="number" min="10" max="600" />
       </div>
       <button class="btn-primary" @click="saveProject" :disabled="saving">Save Changes</button>
       <span v-if="saved" class="hint" style="margin-left: 12px;">Saved!</span>

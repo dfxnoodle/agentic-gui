@@ -49,7 +49,7 @@ projectRoutes.post('/', requirePermission('configure_projects'), async (req, res
     const defaultConfig: CLIConfig = {
       maxTurns: 10,
       maxRuntimeMs: 300000,
-      watchdogTimeoutMs: 60000,
+      watchdogTimeoutMs: 180000,
     };
 
     const project: Project = {
@@ -77,7 +77,7 @@ const updateSchema = z.object({
   cliConfig: z.object({
     maxTurns: z.number().min(1).max(50).optional(),
     maxRuntimeMs: z.number().min(10000).max(600000).optional(),
-    watchdogTimeoutMs: z.number().min(10000).max(120000).optional(),
+    watchdogTimeoutMs: z.number().min(10000).max(600000).optional(),
   }).optional(),
 });
 

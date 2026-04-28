@@ -24,6 +24,20 @@ describe('applyProviderRuntimeDefaults', () => {
     expect(result.watchdogTimeoutMs).toBe(120000);
   });
 
+  it('extends Codex watchdog to at least 180 seconds for long reads', () => {
+    const result = applyProviderRuntimeDefaults('codex', baseConfig, null);
+    expect(result.watchdogTimeoutMs).toBe(180000);
+  });
+
+  it('does not extend provider watchdog beyond max runtime', () => {
+    const result = applyProviderRuntimeDefaults('gemini', {
+      ...baseConfig,
+      maxRuntimeMs: 120000,
+      watchdogTimeoutMs: 60000,
+    }, null);
+    expect(result.watchdogTimeoutMs).toBe(120000);
+  });
+
   it('uses max runtime as watchdog for OpenCode Ollama local runs', () => {
     const providerConfig: ProviderConfig = {
       authMode: 'ollama_local',

@@ -65,6 +65,7 @@ export interface RunJobResult {
 }
 
 const CURSOR_HANG_MAX_RETRIES = 2;
+const DEFAULT_INTERACTIVE_CLI_WATCHDOG_MS = 180000;
 
 export function applyProviderRuntimeDefaults(
   provider: CLIProvider,
@@ -75,6 +76,13 @@ export function applyProviderRuntimeDefaults(
 
   if (provider === 'cursor') {
     effectiveConfig.watchdogTimeoutMs = Math.min(effectiveConfig.watchdogTimeoutMs, 30000);
+  }
+
+  if (provider === 'claude' || provider === 'codex' || provider === 'gemini') {
+    effectiveConfig.watchdogTimeoutMs = Math.min(
+      effectiveConfig.maxRuntimeMs,
+      Math.max(effectiveConfig.watchdogTimeoutMs, DEFAULT_INTERACTIVE_CLI_WATCHDOG_MS),
+    );
   }
 
   if (provider === 'opencode') {
