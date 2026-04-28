@@ -146,7 +146,19 @@ describe('CodexAdapter', () => {
     expect(cmd.command).toBe('codex');
     expect(cmd.args).toContain('exec');
     expect(cmd.args).toContain('--json');
+    expect(cmd.args).toContain('--skip-git-repo-check');
+    expect(cmd.args).toContain('--sandbox');
+    expect(cmd.args).toContain('read-only');
     expect(cmd.args).toContain('-');
+  });
+
+  it('writes Codex final message to fallback path when requested', () => {
+    const cmd = adapter.buildCommand('hello', baseConfig, '/tmp/project', {
+      readOnly: true,
+      outputLastMessagePath: '/tmp/codex-last-message.txt',
+    });
+    expect(cmd.args).toContain('--output-last-message');
+    expect(cmd.args).toContain('/tmp/codex-last-message.txt');
   });
 
   it('does not enable write mode in read-only mode', () => {
@@ -165,6 +177,33 @@ describe('CodexAdapter', () => {
     expect(event!.content).toBe('test reply');
   });
 
+  it('parses current Codex agent_message item', () => {
+    const event = adapter.parseEvent(JSON.stringify({
+      type: 'item.completed',
+      item: { id: 'item_3', type: 'agent_message', text: 'Done from Codex.' },
+    }));
+    expect(event!.type).toBe('text');
+    expect(event!.content).toBe('Done from Codex.');
+  });
+
+  it('parses current Codex command execution progress', () => {
+    const event = adapter.parseEvent(JSON.stringify({
+      type: 'item.started',
+      item: { id: 'item_1', type: 'command_execution', command: 'bash -lc ls', status: 'in_progress' },
+    }));
+    expect(event!.type).toBe('tool_use');
+    expect(event!.content).toContain('bash -lc ls');
+  });
+
+  it('parses current Codex turn failure', () => {
+    const event = adapter.parseEvent(JSON.stringify({
+      type: 'turn.failed',
+      error: { message: 'model response stream ended unexpectedly' },
+    }));
+    expect(event!.type).toBe('error');
+    expect(event!.content).toContain('unexpectedly');
+  });
+
   it('parses item.created tool call', () => {
     const event = adapter.parseEvent(JSON.stringify({
       type: 'item.created',
@@ -180,6 +219,14 @@ describe('CodexAdapter', () => {
       message: 'API error',
     }));
     expect(event!.type).toBe('error');
+  });
+
+  it('treats transient reconnect notices as progress', () => {
+    const event = adapter.parseEvent(JSON.stringify({
+      type: 'error',
+      message: 'Reconnecting... 1/5',
+    }));
+    expect(event!.type).toBe('progress');
   });
 
   it('getEnvVars sets CODEX_API_KEY in platform mode', () => {
@@ -202,6 +249,13 @@ describe('GeminiAdapter', () => {
     expect(cmd.args).toContain('-p');
     expect(cmd.args).toContain('--output-format');
     expect(cmd.args).toContain('stream-json');
+  });
+
+  it('uses trusted read-only mode for read-only runs', () => {
+    const cmd = adapter.buildCommand('hello', baseConfig, '/tmp/project', { readOnly: true });
+    expect(cmd.args).toContain('--approval-mode');
+    expect(cmd.args).toContain('plan');
+    expect(cmd.args).toContain('--skip-trust');
   });
 
   it('drops ad-hoc flags in read-only mode', () => {

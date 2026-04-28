@@ -29,6 +29,16 @@ export const CLI_AUTH_MODES: Record<CLIProvider, AuthModeDef[]> = {
         { key: 'apiKey', label: 'OpenAI API Key', type: 'password', envVar: 'CODEX_API_KEY', required: true, placeholder: 'sk-...' },
       ],
     },
+    {
+      id: 'azure_openai',
+      label: 'Azure OpenAI',
+      fields: [
+        { key: 'apiKey', label: 'Azure OpenAI API Key', type: 'password', envVar: 'AZURE_OPENAI_API_KEY', required: true, placeholder: 'Azure OpenAI resource key' },
+        { key: 'baseUrl', label: 'Azure OpenAI Base URL', type: 'text', envVar: 'AZURE_OPENAI_BASE_URL', required: true, placeholder: 'https://<resource>.openai.azure.com/openai/v1', helpText: 'Codex v1 Responses API URL. If you enter the resource endpoint, /openai/v1 is appended automatically.' },
+        { key: 'modelDeploymentName', label: 'Model Deployment Name', type: 'text', envVar: 'AZURE_OPENAI_MODEL', required: true, placeholder: 'gpt-5-codex' },
+        { key: 'modelReasoningEffort', label: 'Reasoning Effort', type: 'text', envVar: 'CODEX_MODEL_REASONING_EFFORT', placeholder: 'medium', helpText: 'Optional Codex model_reasoning_effort value, for example low, medium, or high.' },
+      ],
+    },
   ],
   gemini: [
     {

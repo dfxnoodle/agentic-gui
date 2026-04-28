@@ -1,5 +1,55 @@
 import { describe, it, expect } from 'vitest';
-import { buildOpenCodeProviderEnvVars } from './secrets.service.js';
+import {
+  buildCodexAzureOpenAIConfigToml,
+  buildCodexProviderEnvVars,
+  buildOpenCodeProviderEnvVars,
+  getCodexAzureOpenAIFieldsFromEnv,
+} from './secrets.service.js';
+
+describe('Codex Azure OpenAI config', () => {
+  it('maps Azure OpenAI mode to Codex env vars', () => {
+    const env = buildCodexProviderEnvVars({
+      authMode: 'azure_openai',
+      fields: {
+        apiKey: 'azure-key',
+        baseUrl: 'https://example.openai.azure.com/openai/v1',
+        modelDeploymentName: 'gpt-5-codex',
+        modelReasoningEffort: 'high',
+      },
+    });
+
+    expect(env.AZURE_OPENAI_API_KEY).toBe('azure-key');
+    expect(env.AZURE_OPENAI_BASE_URL).toBe('https://example.openai.azure.com/openai/v1');
+    expect(env.AZURE_OPENAI_MODEL).toBe('gpt-5-codex');
+    expect(env.CODEX_MODEL_REASONING_EFFORT).toBe('high');
+  });
+
+  it('builds Codex config.toml for Azure OpenAI Responses API', () => {
+    const toml = buildCodexAzureOpenAIConfigToml({
+      baseUrl: 'https://example.openai.azure.com',
+      modelDeploymentName: 'gpt-5-codex',
+    });
+
+    expect(toml).toContain('model_provider = "azure"');
+    expect(toml).toContain('base_url = "https://example.openai.azure.com/openai/v1"');
+    expect(toml).toContain('env_key = "AZURE_OPENAI_API_KEY"');
+    expect(toml).toContain('wire_api = "responses"');
+  });
+
+  it('detects complete Azure OpenAI env configuration', () => {
+    const fields = getCodexAzureOpenAIFieldsFromEnv({
+      AZURE_OPENAI_API_KEY: 'azure-key',
+      AZURE_OPENAI_ENDPOINT: 'https://example.openai.azure.com',
+      AZURE_OPENAI_DEPLOYMENT_NAME: 'gpt-5-codex',
+    });
+
+    expect(fields).toEqual({
+      apiKey: 'azure-key',
+      baseUrl: 'https://example.openai.azure.com',
+      modelDeploymentName: 'gpt-5-codex',
+    });
+  });
+});
 
 describe('buildOpenCodeProviderEnvVars', () => {
   it('maps anthropic mode to ANTHROPIC_API_KEY', () => {

@@ -70,6 +70,12 @@ export const useConversationStore = defineStore('conversation', () => {
     activeConversation.value.messages.push(msg);
   }
 
+  function addMessage(message: Message) {
+    if (!activeConversation.value) return;
+    if (activeConversation.value.messages.some((item) => item.id === message.id)) return;
+    activeConversation.value.messages.push(message);
+  }
+
   function updateConversationState(conversationId: string, state: ConversationState) {
     const conversation = conversations.value.find((item) => item.id === conversationId);
     if (conversation) {
@@ -105,6 +111,7 @@ export const useConversationStore = defineStore('conversation', () => {
     appendStreamingContent,
     clearStreamingContent,
     addAssistantMessage,
+    addMessage,
     updateConversationState,
   };
 });

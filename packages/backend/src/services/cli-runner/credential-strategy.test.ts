@@ -41,6 +41,19 @@ describe('stripProviderSecretsFromEnv', () => {
     expect(env.OPENAI_API_KEY).toBeUndefined();
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
   });
+
+  it('removes Azure OpenAI keys for codex local attempts', () => {
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      AZURE_OPENAI_API_KEY: 'x',
+      AZURE_OPENAI_BASE_URL: 'https://example.openai.azure.com/openai/v1',
+      AZURE_OPENAI_MODEL: 'gpt-5-codex',
+    };
+    stripProviderSecretsFromEnv(env, 'codex');
+    expect(env.AZURE_OPENAI_API_KEY).toBeUndefined();
+    expect(env.AZURE_OPENAI_BASE_URL).toBeUndefined();
+    expect(env.AZURE_OPENAI_MODEL).toBeUndefined();
+  });
 });
 
 describe('resolveCredentialAttempts', () => {

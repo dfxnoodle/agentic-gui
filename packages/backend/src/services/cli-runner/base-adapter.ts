@@ -12,6 +12,7 @@ export interface SpawnCommand {
 export interface CommandBuildOptions {
   readOnly?: boolean;
   attachUrl?: string;
+  outputLastMessagePath?: string;
 }
 
 export interface GetEnvVarsOptions {

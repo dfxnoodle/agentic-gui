@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { applyProviderRuntimeDefaults } from './runner.service.js';
+import { applyProviderRuntimeDefaults, runnerService, type RunJobRequest } from './runner.service.js';
+import { GeminiAdapter } from './adapters/gemini.adapter.js';
 import type { CLIConfig, ProviderConfig } from '@agentic-gui/shared';
 
 const baseConfig: CLIConfig = {
@@ -34,5 +35,56 @@ describe('applyProviderRuntimeDefaults', () => {
 
     const result = applyProviderRuntimeDefaults('opencode', baseConfig, providerConfig);
     expect(result.watchdogTimeoutMs).toBe(baseConfig.maxRuntimeMs);
+  });
+});
+
+describe('runnerService._buildChildEnv', () => {
+  const request: RunJobRequest = {
+    conversationId: 'conv',
+    projectId: 'project',
+    projectPath: '/tmp/project',
+    cliProvider: 'gemini',
+    cliConfig: baseConfig,
+    userMessage: 'hello',
+    taskType: 'research',
+  };
+
+  it('preserves HOME for local credential attempts so CLI auth can be reused', async () => {
+    const previousGeminiKey = process.env.GEMINI_API_KEY;
+    process.env.GEMINI_API_KEY = 'from-parent-env';
+
+    try {
+      const env = await runnerService._buildChildEnv(
+        request,
+        new GeminiAdapter(),
+        'local',
+        '',
+        '/tmp/agentic-gui-test',
+      );
+
+      expect(env.HOME).toBe(process.env.HOME);
+      expect(env.GEMINI_API_KEY).toBeUndefined();
+    } finally {
+      if (previousGeminiKey === undefined) {
+        delete process.env.GEMINI_API_KEY;
+      } else {
+        process.env.GEMINI_API_KEY = previousGeminiKey;
+      }
+    }
+  });
+
+  it('isolates HOME for platform credential attempts', async () => {
+    const env = await runnerService._buildChildEnv(
+      request,
+      new GeminiAdapter(),
+      'platform',
+      'platform-key',
+      '/tmp/agentic-gui-test',
+      {},
+      { GEMINI_API_KEY: 'platform-key' },
+    );
+
+    expect(env.HOME).toBe('/tmp/agentic-gui-test');
+    expect(env.GEMINI_API_KEY).toBe('platform-key');
   });
 });

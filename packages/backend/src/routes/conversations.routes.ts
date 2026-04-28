@@ -162,6 +162,8 @@ conversationRoutes.post('/:id/messages', requirePermission('send_message'), asyn
 
       let assistantMetadata: Message['metadata'] = { cliProvider: effectiveCLIProvider };
 
+      let persistedMessage: Message | undefined;
+
       if (result.fullText) {
         if (taskType === 'plan' || looksLikePlan(result.fullText)) {
           try {
@@ -184,15 +186,15 @@ conversationRoutes.post('/:id/messages', requirePermission('send_message'), asyn
           }
         }
 
-        await conversationService.addMessage(conversationId, 'assistant', result.fullText, assistantMetadata);
+        persistedMessage = await conversationService.addMessage(conversationId, 'assistant', result.fullText, assistantMetadata);
       } else if (result.error) {
-        await conversationService.addMessage(conversationId, 'system', `Error: ${result.error}`);
+        persistedMessage = await conversationService.addMessage(conversationId, 'system', `Error: ${result.error}`);
       } else {
         const providerName = CLI_DISPLAY_NAMES[effectiveCLIProvider] ?? effectiveCLIProvider;
         const fallbackMessage = result.exitCode === 0
           ? `${providerName} completed without producing any output.`
           : `${providerName} stopped before producing any output. Check the provider configuration or increase the watchdog timeout in project settings.`;
-        await conversationService.addMessage(conversationId, 'system', fallbackMessage);
+        persistedMessage = await conversationService.addMessage(conversationId, 'system', fallbackMessage);
       }
 
       const updatedConv = await conversationService.getById(conversationId);
@@ -208,6 +210,7 @@ conversationRoutes.post('/:id/messages', requirePermission('send_message'), asyn
         payload: {
           state: finalState,
           ...(result.fullText ? { assistantMetadata } : {}),
+          ...(persistedMessage ? { message: persistedMessage } : {}),
         },
       });
 
@@ -233,10 +236,12 @@ conversationRoutes.post('/:id/messages', requirePermission('send_message'), asyn
             secondOpinion: true,
           };
 
+          let secondPersistedMessage: Message | undefined;
+
           if (result2.fullText) {
-            await conversationService.addMessage(conversationId, 'assistant', result2.fullText, secondMeta);
+            secondPersistedMessage = await conversationService.addMessage(conversationId, 'assistant', result2.fullText, secondMeta);
           } else if (result2.error) {
-            await conversationService.addMessage(
+            secondPersistedMessage = await conversationService.addMessage(
               conversationId,
               'system',
               `Second opinion error: ${result2.error}`,
@@ -250,11 +255,12 @@ conversationRoutes.post('/:id/messages', requirePermission('send_message'), asyn
             payload: {
               state: 'active',
               ...(result2.fullText ? { assistantMetadata: secondMeta } : {}),
+              ...(secondPersistedMessage ? { message: secondPersistedMessage } : {}),
             },
           });
         } catch (err2) {
           const errorMsg = err2 instanceof Error ? err2.message : 'Unknown error running CLI';
-          await conversationService.addMessage(conversationId, 'system', `Second opinion error: ${errorMsg}`);
+          const errorMessage = await conversationService.addMessage(conversationId, 'system', `Second opinion error: ${errorMsg}`);
           await conversationService.updateState(conversationId, 'active');
 
           sseService.send(conversationId, {
@@ -271,13 +277,13 @@ conversationRoutes.post('/:id/messages', requirePermission('send_message'), asyn
           sseService.send(conversationId, {
             type: 'state_change',
             conversationId,
-            payload: { state: 'active' },
+            payload: { state: 'active', message: errorMessage },
           });
         }
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error running CLI';
-      await conversationService.addMessage(conversationId, 'system', `Error: ${errorMsg}`);
+      const errorMessage = await conversationService.addMessage(conversationId, 'system', `Error: ${errorMsg}`);
       await conversationService.updateState(conversationId, 'active');
 
       sseService.send(conversationId, {
@@ -294,7 +300,7 @@ conversationRoutes.post('/:id/messages', requirePermission('send_message'), asyn
       sseService.send(conversationId, {
         type: 'state_change',
         conversationId,
-        payload: { state: 'active' },
+        payload: { state: 'active', message: errorMessage },
       });
     }
   } catch (err) {

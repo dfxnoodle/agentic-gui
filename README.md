@@ -137,6 +137,7 @@ Supported environment variables:
 
 - Claude Code: `ANTHROPIC_API_KEY`
 - OpenAI Codex: `CODEX_API_KEY`
+- OpenAI Codex with Azure OpenAI: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_MODEL` (optional: `CODEX_MODEL_REASONING_EFFORT`)
 - Gemini CLI: `GEMINI_API_KEY`
 - Cursor CLI: `CURSOR_API_KEY`
 - OpenCode supports multiple auth modes in the Settings UI, including:

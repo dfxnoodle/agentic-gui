@@ -12,7 +12,11 @@ import { CodexAdapter } from './adapters/codex.adapter.js';
 import { GeminiAdapter } from './adapters/gemini.adapter.js';
 import { CursorAdapter } from './adapters/cursor.adapter.js';
 import { OpenCodeAdapter, getOpenCodeReadOnlyEnv, resolveOpenCodeCommand } from './adapters/opencode.adapter.js';
-import { secretsService } from '../secrets.service.js';
+import {
+  buildCodexAzureOpenAIConfigToml,
+  getCodexAzureOpenAIFieldsFromEnv,
+  secretsService,
+} from '../secrets.service.js';
 import { buildPrompt, readProjectContext, type PromptContext } from '../prompt-builder.service.js';
 import { config } from '../../config.js';
 import { createReadOnlyCLIConfig, createReadOnlyWorkspaceSnapshot } from './read-only-workspace.js';
@@ -85,6 +89,23 @@ export function applyProviderRuntimeDefaults(
   }
 
   return effectiveConfig;
+}
+
+async function prepareCodexPlatformConfig(isolationDir: string, childEnv: NodeJS.ProcessEnv): Promise<void> {
+  const providerConfig = await secretsService.getProviderConfig('codex');
+  const azureFields = providerConfig?.authMode === 'azure_openai'
+    ? providerConfig.fields
+    : getCodexAzureOpenAIFieldsFromEnv(childEnv);
+
+  if (!azureFields) return;
+
+  const codexConfigDir = path.join(isolationDir, '.codex');
+  await fs.mkdir(codexConfigDir, { recursive: true });
+  await fs.writeFile(
+    path.join(codexConfigDir, 'config.toml'),
+    buildCodexAzureOpenAIConfigToml(azureFields),
+    'utf-8',
+  );
 }
 
 export const runnerService = {
@@ -286,7 +307,9 @@ export const runnerService = {
     });
 
     const childEnv: NodeJS.ProcessEnv = { ...process.env };
-    childEnv.HOME = isolationDir;
+    if (credentialMode === 'platform') {
+      childEnv.HOME = isolationDir;
+    }
 
     if (credentialMode === 'local') {
       stripProviderSecretsFromEnv(childEnv, request.cliProvider);
@@ -299,6 +322,10 @@ export const runnerService = {
         childEnv,
         providerEnvVars ?? await secretsService.getProviderEnvVars(request.cliProvider),
       );
+
+      if (request.cliProvider === 'codex') {
+        await prepareCodexPlatformConfig(isolationDir, childEnv);
+      }
     }
 
     return childEnv;
@@ -412,7 +439,13 @@ export const runnerService = {
     const isolationDir = path.join(os.tmpdir(), `agentic-gui-${jobId}`);
     await fs.mkdir(isolationDir, { recursive: true });
     const workspacePath = await createReadOnlyWorkspaceSnapshot(request.projectPath, isolationDir);
-    const cmd = adapter.buildCommand(fullPrompt, effectiveConfig, workspacePath, { readOnly: true });
+    const codexOutputLastMessagePath = request.cliProvider === 'codex'
+      ? path.join(isolationDir, 'codex-last-message.txt')
+      : undefined;
+    const cmd = adapter.buildCommand(fullPrompt, effectiveConfig, workspacePath, {
+      readOnly: true,
+      outputLastMessagePath: codexOutputLastMessagePath,
+    });
     cmd.explicitEnv = await runnerService._buildChildEnv(
       request,
       adapter,
@@ -444,6 +477,14 @@ export const runnerService = {
     const result = await handle.completed;
     concurrencyLimiter.release(request.cliProvider);
     activeJobs.delete(jobId);
+
+    if (!fullText && codexOutputLastMessagePath) {
+      try {
+        fullText = (await fs.readFile(codexOutputLastMessagePath, 'utf-8')).trim();
+      } catch {
+        /* best effort fallback */
+      }
+    }
 
     try {
       await fs.rm(isolationDir, { recursive: true, force: true });

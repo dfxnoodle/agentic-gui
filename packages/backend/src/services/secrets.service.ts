@@ -10,6 +10,65 @@ interface Secrets {
 }
 
 const OPENCODE_CONFIG_SCHEMA = 'https://opencode.ai/config.json';
+const CODEX_AZURE_OPENAI_ENV_ALIASES = {
+  apiKey: ['AZURE_OPENAI_API_KEY'],
+  baseUrl: ['AZURE_OPENAI_BASE_URL', 'AZURE_OPENAI_ENDPOINT'],
+  modelDeploymentName: ['AZURE_OPENAI_MODEL', 'AZURE_OPENAI_DEPLOYMENT_NAME', 'AZURE_OPENAI_MODEL_DEPLOYMENT_NAME'],
+  modelReasoningEffort: ['CODEX_MODEL_REASONING_EFFORT'],
+} as const;
+
+function tomlString(value: string): string {
+  return JSON.stringify(value);
+}
+
+function firstEnvValue(env: NodeJS.ProcessEnv, keys: readonly string[]): string | undefined {
+  for (const key of keys) {
+    const value = env[key]?.trim();
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function normalizeAzureOpenAIBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '');
+  if (trimmed.endsWith('/openai/v1')) return trimmed;
+  return `${trimmed}/openai/v1`;
+}
+
+export function getCodexAzureOpenAIFieldsFromEnv(env: NodeJS.ProcessEnv): Record<string, string> | null {
+  const apiKey = firstEnvValue(env, CODEX_AZURE_OPENAI_ENV_ALIASES.apiKey);
+  const baseUrl = firstEnvValue(env, CODEX_AZURE_OPENAI_ENV_ALIASES.baseUrl);
+  const modelDeploymentName = firstEnvValue(env, CODEX_AZURE_OPENAI_ENV_ALIASES.modelDeploymentName);
+  const modelReasoningEffort = firstEnvValue(env, CODEX_AZURE_OPENAI_ENV_ALIASES.modelReasoningEffort);
+
+  if (!apiKey || !baseUrl || !modelDeploymentName) return null;
+
+  return {
+    apiKey,
+    baseUrl,
+    modelDeploymentName,
+    ...(modelReasoningEffort ? { modelReasoningEffort } : {}),
+  };
+}
+
+export function buildCodexAzureOpenAIConfigToml(fields: Record<string, string>): string {
+  const modelDeploymentName = fields.modelDeploymentName.trim();
+  const baseUrl = normalizeAzureOpenAIBaseUrl(fields.baseUrl);
+  const modelReasoningEffort = fields.modelReasoningEffort?.trim() || 'medium';
+
+  return [
+    `model = ${tomlString(modelDeploymentName)}`,
+    'model_provider = "azure"',
+    `model_reasoning_effort = ${tomlString(modelReasoningEffort)}`,
+    '',
+    '[model_providers.azure]',
+    'name = "Azure OpenAI"',
+    `base_url = ${tomlString(baseUrl)}`,
+    'env_key = "AZURE_OPENAI_API_KEY"',
+    'wire_api = "responses"',
+    '',
+  ].join('\n');
+}
 
 function buildOpenCodeInlineConfig(config: ProviderConfig): Record<string, unknown> | null {
   const apiKey = config.fields.apiKey?.trim();
@@ -91,6 +150,23 @@ export function buildOpenCodeProviderEnvVars(config: ProviderConfig): Record<str
   return envVars;
 }
 
+export function buildCodexProviderEnvVars(config: ProviderConfig): Record<string, string> {
+  if (config.authMode !== 'azure_openai') return {};
+
+  const envVars: Record<string, string> = {};
+  const apiKey = config.fields.apiKey?.trim();
+  const baseUrl = config.fields.baseUrl?.trim();
+  const modelDeploymentName = config.fields.modelDeploymentName?.trim();
+  const modelReasoningEffort = config.fields.modelReasoningEffort?.trim();
+
+  if (apiKey) envVars.AZURE_OPENAI_API_KEY = apiKey;
+  if (baseUrl) envVars.AZURE_OPENAI_BASE_URL = baseUrl;
+  if (modelDeploymentName) envVars.AZURE_OPENAI_MODEL = modelDeploymentName;
+  if (modelReasoningEffort) envVars.CODEX_MODEL_REASONING_EFFORT = modelReasoningEffort;
+
+  return envVars;
+}
+
 async function readSecrets(): Promise<Secrets> {
   try {
     const raw = await fs.readFile(getSecretsPath(), 'utf-8');
@@ -113,6 +189,35 @@ async function writeSecrets(secrets: Secrets): Promise<void> {
 
 export const secretsService = {
   async validateProviderConfig(provider: string, config: ProviderConfig): Promise<void> {
+    if (provider === 'codex' && config.authMode === 'azure_openai') {
+      const apiKey = config.fields.apiKey?.trim();
+      const baseUrl = config.fields.baseUrl?.trim();
+      const modelDeploymentName = config.fields.modelDeploymentName?.trim();
+
+      if (!apiKey) {
+        throw Object.assign(new Error('Codex Azure OpenAI mode requires an Azure OpenAI API key.'), { status: 400 });
+      }
+
+      if (!baseUrl) {
+        throw Object.assign(new Error('Codex Azure OpenAI mode requires a base URL.'), { status: 400 });
+      }
+
+      try {
+        new URL(normalizeAzureOpenAIBaseUrl(baseUrl));
+      } catch {
+        throw Object.assign(
+          new Error(`Codex Azure OpenAI base URL "${baseUrl}" is not a valid URL.`),
+          { status: 400 },
+        );
+      }
+
+      if (!modelDeploymentName) {
+        throw Object.assign(new Error('Codex Azure OpenAI mode requires a model deployment name.'), { status: 400 });
+      }
+
+      return;
+    }
+
     if (provider === 'gemini' && config.authMode === 'vertex_ai') {
       const credentialsPath = config.fields.gcpCredentials?.trim();
       if (!credentialsPath) {
@@ -164,7 +269,7 @@ export const secretsService = {
     // First check env vars
     const envMap: Record<string, string | string[]> = {
       claude: 'ANTHROPIC_API_KEY',
-      codex: 'CODEX_API_KEY',
+      codex: ['CODEX_API_KEY', 'OPENAI_API_KEY'],
       gemini: 'GEMINI_API_KEY',
       cursor: 'CURSOR_API_KEY',
       opencode: [
@@ -176,6 +281,10 @@ export const secretsService = {
         'GOOGLE_API_KEY',
       ],
     };
+
+    if (provider === 'codex' && getCodexAzureOpenAIFieldsFromEnv(process.env)) {
+      return process.env.AZURE_OPENAI_API_KEY!;
+    }
 
     const envKey = envMap[provider];
     if (Array.isArray(envKey)) {
@@ -236,6 +345,10 @@ export const secretsService = {
 
     if (provider === 'opencode') {
       return buildOpenCodeProviderEnvVars(config);
+    }
+
+    if (provider === 'codex' && config.authMode === 'azure_openai') {
+      return buildCodexProviderEnvVars(config);
     }
 
     // For Vertex AI, set the mode flag

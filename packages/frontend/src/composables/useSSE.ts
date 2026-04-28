@@ -82,6 +82,7 @@ export function useSSE() {
       const payload = envelope.payload as {
         state: string;
         assistantMetadata?: Message['metadata'];
+        message?: Message;
       };
       conversationStore.updateConversationState(envelope.conversationId, payload.state as ConversationState);
       if (payload.state === 'researching') {
@@ -95,6 +96,8 @@ export function useSSE() {
             payload.assistantMetadata,
           );
           conversationStore.clearStreamingContent();
+        } else if (payload.message) {
+          conversationStore.addMessage(payload.message);
         }
         isStreaming.value = false;
         thinkingText.value = '';

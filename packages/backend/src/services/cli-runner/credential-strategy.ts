@@ -92,7 +92,17 @@ export async function detectLocalSetup(provider: CLIProvider, projectPath: strin
 /** Env vars cleared on local attempts so inherited shell keys do not mask workspace login. */
 export const PROVIDER_SECRET_ENV_VARS: Record<CLIProvider, readonly string[]> = {
   claude: ['ANTHROPIC_API_KEY'],
-  codex: ['CODEX_API_KEY', 'OPENAI_API_KEY'],
+  codex: [
+    'CODEX_API_KEY',
+    'OPENAI_API_KEY',
+    'AZURE_OPENAI_API_KEY',
+    'AZURE_OPENAI_BASE_URL',
+    'AZURE_OPENAI_ENDPOINT',
+    'AZURE_OPENAI_MODEL',
+    'AZURE_OPENAI_DEPLOYMENT_NAME',
+    'AZURE_OPENAI_MODEL_DEPLOYMENT_NAME',
+    'CODEX_MODEL_REASONING_EFFORT',
+  ],
   gemini: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
   cursor: ['CURSOR_API_KEY'],
   opencode: [

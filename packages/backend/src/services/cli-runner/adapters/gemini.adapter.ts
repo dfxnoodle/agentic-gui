@@ -31,6 +31,10 @@ export class GeminiAdapter implements CLIAdapter {
     // Use streaming JSON for real-time events
     args.push('--output-format', 'stream-json');
 
+    if (options.readOnly) {
+      args.push('--approval-mode', 'plan', '--skip-trust');
+    }
+
     if (!options.readOnly && config.additionalFlags?.length) {
       args.push(...config.additionalFlags);
     }
