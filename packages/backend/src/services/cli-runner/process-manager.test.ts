@@ -5,9 +5,12 @@ import { describe, it, expect } from 'vitest';
 import { formatSpawnFailure, formatWatchdogTimeoutMessage, withCommonCliBinPaths } from './process-manager.js';
 
 describe('withCommonCliBinPaths', () => {
-  it('prepends common CLI bin directories to PATH', () => {
-    const env = withCommonCliBinPaths({ PATH: '/usr/bin' });
-    expect(env.PATH).toContain('/usr/bin');
+  it('preserves existing PATH precedence before fallback CLI bin directories', () => {
+    const env = withCommonCliBinPaths({ PATH: '/home/user/.nvm/bin:/usr/bin' });
+    const parts = env.PATH!.split(path.delimiter);
+
+    expect(parts[0]).toBe('/home/user/.nvm/bin');
+    expect(parts[1]).toBe('/usr/bin');
     expect(env.PATH).toContain('/usr/local/bin');
   });
 });

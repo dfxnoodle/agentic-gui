@@ -49,7 +49,7 @@ export function formatWatchdogTimeoutMessage(provider: CLIProvider, watchdogTime
 export function withCommonCliBinPaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const currentPath = env.PATH ?? '';
   const pathParts = currentPath.split(path.delimiter).filter(Boolean);
-  const merged = [...COMMON_CLI_BIN_DIRS, ...pathParts];
+  const merged = [...pathParts, ...COMMON_CLI_BIN_DIRS];
   const unique = merged.filter((part, index) => merged.indexOf(part) === index);
 
   return {
