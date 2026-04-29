@@ -21,10 +21,31 @@ export const memoryService = {
     let existing = '';
 
     try {
+      const projectStats = await fs.stat(projectPath);
+      if (!projectStats.isDirectory()) {
+        throw new Error('path is not a directory');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw Object.assign(
+        new Error(`Project destination folder is not accessible: ${projectPath}. ${message}`),
+        { status: 400 },
+      );
+    }
+
+    try {
       existing = await fs.readFile(memoryPath, 'utf-8');
-    } catch {
-      // File doesn't exist — start with a header
-      existing = '# Project Memory\n\nThis file records approved plans and decisions.\n\n---\n';
+    } catch (err) {
+      if (isNotFoundError(err)) {
+        // File doesn't exist — start with a header
+        existing = '# Project Memory\n\nThis file records approved plans and decisions.\n\n---\n';
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        throw Object.assign(
+          new Error(`Cannot read MEMORY.md at ${memoryPath}: ${message}`),
+          { status: 500 },
+        );
+      }
     }
 
     const approvedAt = new Date();
@@ -34,10 +55,23 @@ export const memoryService = {
 
     // Atomic write
     const tmpPath = memoryPath + '.tmp';
-    await fs.writeFile(tmpPath, updated, 'utf-8');
-    await fs.rename(tmpPath, memoryPath);
+    try {
+      await fs.writeFile(tmpPath, updated, 'utf-8');
+      await fs.rename(tmpPath, memoryPath);
+    } catch (err) {
+      await fs.rm(tmpPath, { force: true }).catch(() => undefined);
+      const message = err instanceof Error ? err.message : String(err);
+      throw Object.assign(
+        new Error(`Cannot write MEMORY.md at ${memoryPath}: ${message}`),
+        { status: 500 },
+      );
+    }
   },
 };
+
+function isNotFoundError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
+}
 
 function formatMemoryEntry(plan: Plan, approvedAt: Date, approverName: string): string {
   const lines: string[] = [];

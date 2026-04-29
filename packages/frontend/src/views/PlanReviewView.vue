@@ -13,6 +13,8 @@
       </router-link>
     </div>
 
+    <p v-if="actionError" class="error action-error">{{ actionError }}</p>
+
     <!-- Contradiction Alert -->
     <div v-if="plan.contradictions?.verdict === 'conflicts_found'" class="contradiction-alert">
       <h3>Conflicts Detected</h3>
@@ -115,6 +117,7 @@ const router = useRouter();
 const planStore = usePlanStore();
 
 const acting = ref(false);
+const actionError = ref('');
 const allVersions = ref<Array<{ id: string; version: number; status: string; createdAt: string }>>([]);
 
 const plan = computed(() => planStore.activePlan);
@@ -147,9 +150,12 @@ function formatDate(iso: string): string {
 
 async function handleApprove() {
   if (!plan.value) return;
+  actionError.value = '';
   acting.value = true;
   try {
     await planStore.approve(plan.value.id);
+  } catch (err) {
+    actionError.value = getActionErrorMessage(err);
   } finally {
     acting.value = false;
   }
@@ -157,9 +163,12 @@ async function handleApprove() {
 
 async function handleReject() {
   if (!plan.value) return;
+  actionError.value = '';
   acting.value = true;
   try {
     await planStore.reject(plan.value.id);
+  } catch (err) {
+    actionError.value = getActionErrorMessage(err);
   } finally {
     acting.value = false;
   }
@@ -167,11 +176,14 @@ async function handleReject() {
 
 async function handleDeleteChange() {
   if (!plan.value) return;
+  actionError.value = '';
   acting.value = true;
   const conversationId = plan.value.conversationId;
   try {
     await planStore.remove(plan.value.id);
     await router.push(conversationId ? `/chat/${conversationId}` : '/chat');
+  } catch (err) {
+    actionError.value = getActionErrorMessage(err);
   } finally {
     acting.value = false;
   }
@@ -179,12 +191,20 @@ async function handleDeleteChange() {
 
 async function handleForceCommit() {
   if (!plan.value) return;
+  actionError.value = '';
   acting.value = true;
   try {
     await planStore.forceCommit(plan.value.id);
+  } catch (err) {
+    actionError.value = getActionErrorMessage(err);
   } finally {
     acting.value = false;
   }
+}
+
+function getActionErrorMessage(err: unknown): string {
+  const responseError = err as { response?: { data?: { error?: string } }; message?: string };
+  return responseError.response?.data?.error ?? responseError.message ?? 'Action failed.';
 }
 
 async function loadPlan(id: string) {
