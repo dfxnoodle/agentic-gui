@@ -3,6 +3,8 @@ import path from 'node:path';
 import type { Plan } from '@agentic-gui/shared';
 import { readProjectFile, resolveProjectFilePath } from './project-files.service.js';
 
+const MEMORY_FILE_MODE = 0o644;
+
 export const memoryService = {
   /**
    * Read MEMORY.md from the target project root.
@@ -57,13 +59,15 @@ export const memoryService = {
     // Atomic write
     const tmpPath = memoryPath + '.tmp';
     try {
-      await fs.writeFile(tmpPath, updated, 'utf-8');
+      await fs.writeFile(tmpPath, updated, { encoding: 'utf-8', mode: MEMORY_FILE_MODE });
       await fs.rename(tmpPath, memoryPath);
+      await ensureMemoryFileMode(memoryPath);
     } catch (err) {
       await fs.rm(tmpPath, { force: true }).catch(() => undefined);
       if (existingMemoryPath && isPermissionError(err)) {
         try {
-          await fs.writeFile(memoryPath, updated, 'utf-8');
+          await fs.writeFile(memoryPath, updated, { encoding: 'utf-8', mode: MEMORY_FILE_MODE });
+          await ensureMemoryFileMode(memoryPath);
           return;
         } catch (directErr) {
           const tmpMessage = err instanceof Error ? err.message : String(err);
@@ -82,6 +86,16 @@ export const memoryService = {
     }
   },
 };
+
+async function ensureMemoryFileMode(memoryPath: string): Promise<void> {
+  try {
+    await fs.chmod(memoryPath, MEMORY_FILE_MODE);
+  } catch (err) {
+    if (!isPermissionError(err)) {
+      throw err;
+    }
+  }
+}
 
 function isNotFoundError(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
