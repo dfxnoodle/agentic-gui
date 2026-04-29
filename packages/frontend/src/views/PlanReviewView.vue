@@ -82,6 +82,13 @@
       </button>
     </div>
 
+    <div v-if="plan.status === 'approved' && plan.contradictions?.verdict !== 'conflicts_found'" class="approved-recovery card">
+      <p>This plan is approved but has not been committed to project memory yet.</p>
+      <button @click="handleForceCommit" class="btn-primary btn-success" :disabled="acting">
+        {{ acting ? 'Processing...' : 'Commit to MEMORY.md' }}
+      </button>
+    </div>
+
     <!-- Committed confirmation -->
     <div v-if="plan.status === 'committed'" class="committed-banner">
       Plan has been approved and committed to project memory (MEMORY.md).

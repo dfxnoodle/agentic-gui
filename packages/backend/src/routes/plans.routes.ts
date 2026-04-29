@@ -226,51 +226,42 @@ planRoutes.post('/:id/approve', requirePermission('approve_plan'), async (req, r
       payload: { planId, status: 'approved', phase: 'checking_contradictions' },
     });
 
-    // Return immediately, run contradiction check async
-    res.json(approvedPlan);
+    const check = await contradictionService.check(
+      approvedPlan,
+      project.rootPath,
+      project.cliProvider,
+      project.cliConfig,
+      project.credentialPreference,
+    );
 
-    // Run contradiction check
-    try {
-      const check = await contradictionService.check(
-        approvedPlan,
-        project.rootPath,
-        project.cliProvider,
-        project.cliConfig,
-        project.credentialPreference,
-      );
+    const checkedPlan = await planService.setContradictions(planId, check);
 
-      await planService.setContradictions(planId, check);
-
-      if (check.verdict === 'conflicts_found') {
-        // Notify user of conflicts
-        sseService.send(plan.conversationId, {
-          type: 'plan_update',
-          conversationId: plan.conversationId,
-          payload: { planId, status: 'approved', contradictions: check },
-        });
-      } else {
-        // No conflicts — commit to MEMORY.md
-        const approver = await userService.getById(req.auth!.userId);
-        const approverName = approver ? `${approver.displayName} (${approver.role})` : req.auth!.username;
-
-        await memoryService.appendPlan(project.rootPath, approvedPlan, approverName);
-        await planService.transition(planId, 'committed');
-
-        sseService.send(plan.conversationId, {
-          type: 'plan_update',
-          conversationId: plan.conversationId,
-          payload: { planId, status: 'committed' },
-        });
-      }
-    } catch (err) {
-      console.error('Post-approval processing failed:', err);
-      // Plan stays approved but MEMORY.md not updated
+    if (check.verdict === 'conflicts_found') {
+      // Notify user of conflicts
       sseService.send(plan.conversationId, {
         type: 'plan_update',
         conversationId: plan.conversationId,
-        payload: { planId, status: 'approved', error: 'Contradiction check or memory update failed' },
+        payload: { planId, status: 'approved', contradictions: check },
       });
+
+      res.json(checkedPlan);
+      return;
     }
+
+    // No conflicts — commit to MEMORY.md before reporting success to the caller.
+    const approver = await userService.getById(req.auth!.userId);
+    const approverName = approver ? `${approver.displayName} (${approver.role})` : req.auth!.username;
+
+    await memoryService.appendPlan(project.rootPath, approvedPlan, approverName);
+    const committedPlan = await planService.transition(planId, 'committed');
+
+    sseService.send(plan.conversationId, {
+      type: 'plan_update',
+      conversationId: plan.conversationId,
+      payload: { planId, status: 'committed' },
+    });
+
+    res.json(committedPlan);
   } catch (err) {
     next(err);
   }
