@@ -17,7 +17,8 @@ export const memoryService = {
    * Uses atomic write (tmp + rename) to prevent corruption.
    */
   async appendPlan(projectPath: string, plan: Plan, approverName: string): Promise<void> {
-    const memoryPath = await resolveProjectFilePath(projectPath, 'MEMORY.md') ?? path.join(projectPath, 'MEMORY.md');
+    const existingMemoryPath = await resolveProjectFilePath(projectPath, 'MEMORY.md');
+    const memoryPath = existingMemoryPath ?? path.join(projectPath, 'MEMORY.md');
     let existing = '';
 
     try {
@@ -60,6 +61,19 @@ export const memoryService = {
       await fs.rename(tmpPath, memoryPath);
     } catch (err) {
       await fs.rm(tmpPath, { force: true }).catch(() => undefined);
+      if (existingMemoryPath && isPermissionError(err)) {
+        try {
+          await fs.writeFile(memoryPath, updated, 'utf-8');
+          return;
+        } catch (directErr) {
+          const tmpMessage = err instanceof Error ? err.message : String(err);
+          const directMessage = directErr instanceof Error ? directErr.message : String(directErr);
+          throw Object.assign(
+            new Error(`Cannot write MEMORY.md at ${memoryPath}: temp write failed (${tmpMessage}); direct write failed (${directMessage})`),
+            { status: 500 },
+          );
+        }
+      }
       const message = err instanceof Error ? err.message : String(err);
       throw Object.assign(
         new Error(`Cannot write MEMORY.md at ${memoryPath}: ${message}`),
@@ -71,6 +85,15 @@ export const memoryService = {
 
 function isNotFoundError(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
+}
+
+function isPermissionError(error: unknown): boolean {
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error.code === 'EACCES' || error.code === 'EPERM'),
+  );
 }
 
 function formatMemoryEntry(plan: Plan, approvedAt: Date, approverName: string): string {
