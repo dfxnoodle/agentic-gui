@@ -58,17 +58,22 @@ watch(() => props.projectId, load);
 }
 
 .agents-info-btn {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  border: none;
+  border: 1px solid var(--color-border);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 12px;
-  background: var(--color-warning);
-  color: #111827;
+  font-size: 13px;
+  background: #f5f5f7;
+  color: var(--color-text-secondary);
   cursor: pointer;
+}
+
+.agents-info-btn:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
 }
 </style>

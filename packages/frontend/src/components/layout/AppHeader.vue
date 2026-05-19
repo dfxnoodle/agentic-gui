@@ -22,8 +22,8 @@
       </span>
     </div>
     <div class="header-right">
-      <button @click="toggleTheme" class="btn-small btn-ghost theme-toggle" title="Toggle Theme">
-        {{ isDark ? '🌙 Dark' : '☀️ Light' }}
+      <button @click="toggleTheme" class="btn-small btn-ghost theme-toggle" title="Toggle theme">
+        {{ isDark ? 'Dark' : 'Light' }}
       </button>
       <span class="badge role-badge">{{ authStore.user?.roleName ?? authStore.user?.role }}</span>
       <span class="username">{{ authStore.user?.username }}</span>
